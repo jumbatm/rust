@@ -23,10 +23,12 @@ use rustc::ty::Ty;
 use rustc_codegen_ssa::traits::*;
 use rustc_data_structures::small_c_str::SmallCStr;
 
+use rustc::bug;
+
 /// Declare a function.
 ///
-/// If there’s a value with the same name already declared, the function will
-/// update the declaration and return existing Value instead.
+/// If there’s a value with the same symbol name already declared but with a different type,
+/// codegen is terminated.
 fn declare_raw_fn(
     cx: &CodegenCx<'ll, '_>,
     name: &str,
@@ -35,7 +37,19 @@ fn declare_raw_fn(
 ) -> &'ll Value {
     debug!("declare_raw_fn(name={:?}, ty={:?})", name, ty);
     let namebuf = SmallCStr::new(name);
-    let llfn = unsafe { llvm::LLVMRustGetOrInsertFunction(cx.llmod, namebuf.as_ptr(), ty) };
+    let llfn = unsafe {
+        let val = llvm::LLVMRustGetOrInsertFunction(cx.llmod, namebuf.as_ptr(), ty);
+        if let None = llvm::LLVMIsAFunction(val) {
+            // Terminate compilation.
+            // FIXME: More graceful error handling -- may even be possible to be clever about
+            // renaming local symbols on name clash?
+            cx.sess().struct_err(&format!("Function `{}` declared with different types.", name))
+                .emit();
+            cx.sess().abort_if_errors();
+            bug!();
+        }
+        val
+    };
 
     llvm::SetFunctionCallConv(llfn, callconv);
     // Function addresses in Rust are never significant, allowing functions to
@@ -62,7 +76,7 @@ impl DeclareMethods<'tcx> for CodegenCx<'ll, 'tcx> {
     }
 
     fn declare_fn(&self, name: &str, fn_abi: &FnAbi<'tcx, Ty<'tcx>>) -> &'ll Value {
-        debug!("declare_rust_fn(name={:?}, fn_abi={:?})", name, fn_abi);
+        debug!("declare_fn(name={:?}, fn_abi={:?})", name, fn_abi);
 
         let llfn = declare_raw_fn(self, name, fn_abi.llvm_cconv(), fn_abi.llvm_type(self));
         fn_abi.apply_attrs_llfn(self, llfn);

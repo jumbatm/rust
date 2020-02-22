@@ -883,6 +883,7 @@ extern "C" {
     pub fn LLVMSetTailCall(CallInst: &Value, IsTailCall: Bool);
 
     // Operations on functions
+    pub fn LLVMIsAFunction(Val: &Value) -> Option<&Value>;
     pub fn LLVMRustGetOrInsertFunction(
         M: &'a Module,
         Name: *const c_char,
