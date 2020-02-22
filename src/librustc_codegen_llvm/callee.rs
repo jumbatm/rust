@@ -12,9 +12,9 @@ use crate::value::Value;
 use log::debug;
 use rustc_codegen_ssa::traits::*;
 
+use rustc::bug;
 use rustc::ty::layout::{FnAbiExt, HasTyCtxt};
 use rustc::ty::{Instance, TypeFoldable};
-use rustc::bug;
 
 /// Codegens a reference to a fn/method item, monomorphizing and
 /// inlining as it goes.
@@ -45,7 +45,9 @@ pub fn get_fn(cx: &CodegenCx<'ll, 'tcx>, instance: Instance<'tcx>) -> &'ll Value
         let llptrty = fn_abi.ptr_to_llvm_type(cx);
 
         if cx.val_ty(llfn) != llptrty {
-            cx.sess().struct_err(&format!("Function `{}` declared with multiple types.", sym)).emit();
+            cx.sess()
+                .struct_err(&format!("Function `{}` declared with multiple types.", sym))
+                .emit();
             cx.sess().abort_if_errors();
             bug!();
         } else {

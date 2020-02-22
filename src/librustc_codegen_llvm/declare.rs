@@ -43,7 +43,8 @@ fn declare_raw_fn(
             // Terminate compilation.
             // FIXME: More graceful error handling -- may even be possible to be clever about
             // renaming local symbols on name clash?
-            cx.sess().struct_err(&format!("Function `{}` declared with different types.", name))
+            cx.sess()
+                .struct_err(&format!("Function `{}` declared with different types.", name))
                 .emit();
             cx.sess().abort_if_errors();
             bug!();
