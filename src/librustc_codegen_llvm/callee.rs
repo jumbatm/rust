@@ -14,6 +14,7 @@ use rustc_codegen_ssa::traits::*;
 
 use rustc::ty::layout::{FnAbiExt, HasTyCtxt};
 use rustc::ty::{Instance, TypeFoldable};
+use rustc::bug;
 
 /// Codegens a reference to a fn/method item, monomorphizing and
 /// inlining as it goes.
@@ -41,35 +42,12 @@ pub fn get_fn(cx: &CodegenCx<'ll, 'tcx>, instance: Instance<'tcx>) -> &'ll Value
     let fn_abi = FnAbi::of_instance(cx, instance, &[]);
 
     let llfn = if let Some(llfn) = cx.get_declared_value(&sym) {
-        // Create a fn pointer with the new signature.
         let llptrty = fn_abi.ptr_to_llvm_type(cx);
 
-        // This is subtle and surprising, but sometimes we have to bitcast
-        // the resulting fn pointer.  The reason has to do with external
-        // functions.  If you have two crates that both bind the same C
-        // library, they may not use precisely the same types: for
-        // example, they will probably each declare their own structs,
-        // which are distinct types from LLVM's point of view (nominal
-        // types).
-        //
-        // Now, if those two crates are linked into an application, and
-        // they contain inlined code, you can wind up with a situation
-        // where both of those functions wind up being loaded into this
-        // application simultaneously. In that case, the same function
-        // (from LLVM's point of view) requires two types. But of course
-        // LLVM won't allow one function to have two types.
-        //
-        // What we currently do, therefore, is declare the function with
-        // one of the two types (whichever happens to come first) and then
-        // bitcast as needed when the function is referenced to make sure
-        // it has the type we expect.
-        //
-        // This can occur on either a crate-local or crate-external
-        // reference. It also occurs when testing libcore and in some
-        // other weird situations. Annoying.
         if cx.val_ty(llfn) != llptrty {
-            debug!("get_fn: casting {:?} to {:?}", llfn, llptrty);
-            cx.const_ptrcast(llfn, llptrty)
+            cx.sess().struct_err(&format!("Function `{}` declared with multiple types.", sym)).emit();
+            cx.sess().abort_if_errors();
+            bug!();
         } else {
             debug!("get_fn: not casting pointer!");
             llfn
