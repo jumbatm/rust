@@ -12,6 +12,8 @@ use crate::value::Value;
 use log::debug;
 use rustc_codegen_ssa::traits::*;
 
+use rustc_hir;
+
 use rustc::bug;
 use rustc::ty::layout::{FnAbiExt, HasTyCtxt};
 use rustc::ty::{Instance, TypeFoldable};
@@ -41,17 +43,38 @@ pub fn get_fn(cx: &CodegenCx<'ll, 'tcx>, instance: Instance<'tcx>) -> &'ll Value
 
     let fn_abi = FnAbi::of_instance(cx, instance, &[]);
 
+    let instance_def_id = instance.def_id();
+
     let llfn = if let Some(llfn) = cx.get_declared_value(&sym) {
         let llptrty = fn_abi.ptr_to_llvm_type(cx);
 
         if cx.val_ty(llfn) != llptrty {
-            cx.sess()
-                .struct_err(&format!("Function `{}` has already been declared.", sym))
-                .emit();
+            debug!("get_fn: Type mismatch! Reporting error.");
+            let span = tcx.hir()
+                .as_local_hir_id(instance_def_id)
+                .and_then(|hir_id| {
+                    debug!("Got {}", hir_id);
+                    tcx.hir().find(hir_id)
+                })
+                .and_then(|node| {
+                    debug!("node: {:?}", node);
+                    match node {
+                        rustc_hir::Node::Item(rustc_hir::Item { span, ..})
+                          | rustc_hir::Node::ForeignItem(rustc_hir::ForeignItem { span, ..}) => Some(*span),
+                        _ => None
+                    }
+                });
+
+            let mut diag = cx.sess().struct_err(&format!("An extern function named `{}` has already been declared.", sym));
+            if let Some(span) = span {
+                diag.set_span(span);
+            }
+            diag.note();
+            diag.emit();
             cx.sess().abort_if_errors();
             bug!();
         } else {
-            debug!("get_fn: not casting pointer!");
+            debug!("get_fn: types matched");
             llfn
         }
     } else {
@@ -59,8 +82,6 @@ pub fn get_fn(cx: &CodegenCx<'ll, 'tcx>, instance: Instance<'tcx>) -> &'ll Value
         debug!("get_fn: not casting pointer!");
 
         attributes::from_fn_attrs(cx, llfn, instance, &fn_abi);
-
-        let instance_def_id = instance.def_id();
 
         // Apply an appropriate linkage/visibility value to our item that we
         // just declared.

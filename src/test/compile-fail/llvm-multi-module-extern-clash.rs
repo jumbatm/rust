@@ -5,7 +5,8 @@ mod foo {
 }
 mod bar {
     extern {
-        pub fn func(x: i32); // ERROR symbol `func` has already been declared.
+        pub fn func(x: i32);
+        //~^ ERROR An extern function named `func` has already been declared
     }
 }
 fn main() {
