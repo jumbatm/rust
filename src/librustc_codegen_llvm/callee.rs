@@ -46,7 +46,7 @@ pub fn get_fn(cx: &CodegenCx<'ll, 'tcx>, instance: Instance<'tcx>) -> &'ll Value
 
         if cx.val_ty(llfn) != llptrty {
             cx.sess()
-                .struct_err(&format!("Function `{}` declared with multiple types.", sym))
+                .struct_err(&format!("Function `{}` has already been declared.", sym))
                 .emit();
             cx.sess().abort_if_errors();
             bug!();
