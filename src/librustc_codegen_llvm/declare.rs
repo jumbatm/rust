@@ -40,14 +40,7 @@ fn declare_raw_fn(
     let llfn = unsafe {
         let val = llvm::LLVMRustGetOrInsertFunction(cx.llmod, namebuf.as_ptr(), ty);
         if let None = llvm::LLVMIsAFunction(val) {
-            // Terminate compilation.
-            // FIXME: More graceful error handling -- may even be possible to be clever about
-            // renaming local symbols on name clash?
-            cx.sess()
-                .struct_err(&format!("Function `{}` declared with different types.", name))
-                .emit();
-            cx.sess().abort_if_errors();
-            bug!();
+            bug!("Can't insert `{:?} @{}` because {1} already exists in the module -- this should have been caught earlier.", ty, name);
         }
         val
     };
