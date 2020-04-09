@@ -81,3 +81,15 @@ LL |         fn different_mod(x: u64);
    = note: expected  `unsafe extern "C" fn(u8)`
               found  `unsafe extern "C" fn(u64)`
 
+warning: `variadic_decl` redeclared with a different signature
+  --> $DIR/clashing-extern-fn.rs:94:9
+   |
+LL |     fn variadic_decl(x: u8, ...);
+   |     ----------------------------- `variadic_decl` previously declared here
+...
+LL |         fn variadic_decl(x: u8);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^ this signature doesn't match the previous declaration
+   |
+   = note: expected  `unsafe extern "C" fn(u8, ...)`
+              found  `unsafe extern "C" fn(u8)`
+

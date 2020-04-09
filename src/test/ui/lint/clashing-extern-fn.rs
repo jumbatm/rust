@@ -85,6 +85,16 @@ mod b {
     }
 }
 
+extern {
+    fn variadic_decl(x: u8, ...);
+}
+
+fn variadic_clash() {
+    extern {
+        fn variadic_decl(x: u8); //~ WARN `variadic_decl` redeclared with a different signature
+    }
+}
+
 #[no_mangle]
 fn no_mangle_name(x: u8) { }
 
