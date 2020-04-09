@@ -84,3 +84,24 @@ mod b {
         fn different_mod(x: u64); //~ WARN `different_mod` redeclared with a different signature
     }
 }
+
+#[no_mangle]
+fn no_mangle_name(x: u8) { }
+
+extern {
+    #[link_name = "unique_link_name"]
+    fn link_name_specified(x: u8);
+}
+
+fn tricky_no_clash() {
+    extern {
+        // Shouldn't warn, because the declaration above actually declares a different symbol (and
+        // Rust's name resolution rules around shadowing will handle this gracefully).
+        fn link_name_specified() -> u32;
+
+        // The case of a no_mangle name colliding with an extern decl (see #28179) is related but
+        // shouldn't be reported by ClashingExternDecl, because this is an example of unmangled
+        // name clash causing bad behaviour in functions with a defined body.
+        fn no_mangle_name() -> u32;
+    }
+}
