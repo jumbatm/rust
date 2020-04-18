@@ -115,3 +115,15 @@ fn tricky_no_clash() {
         fn no_mangle_name() -> u32;
     }
 }
+
+mod one {
+    #[repr(C)] struct Banana { weight: u64 }
+    extern "C" { fn weigh_banana(count: *const Banana) -> u64; }
+}
+
+mod two {
+    #[repr(C)] struct Banana { weight: u64 } // note: distinct type
+    // This should not trigger the lint because two::Banana is structurally equivalent to
+    // one::Banana.
+    extern "C" { fn weigh_banana(count: *const Banana) -> u64; }
+}

@@ -2126,15 +2126,14 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ClashingExternDecl {
         if let ForeignItemKind::Fn(..) = this_fi.kind {
             let tcx = *&cx.tcx;
             if let Some(existing_hid) = self.insert(tcx, this_fi) {
-                let existing_decl_ty =
-                    tcx.type_of(tcx.hir().local_def_id(existing_hid)).fn_sig(tcx);
-                let this_decl_ty = tcx.type_of(tcx.hir().local_def_id(this_fi.hir_id)).fn_sig(tcx);
+                let existing_decl_ty = tcx.type_of(tcx.hir().local_def_id(existing_hid));
+                let this_decl_ty = tcx.type_of(tcx.hir().local_def_id(this_fi.hir_id));
                 debug!(
                     "ClashingExternDecl: Comparing existing {:?}: {:?} to this {:?}: {:?}",
                     existing_hid, existing_decl_ty, this_fi.hir_id, this_decl_ty
                 );
                 // Check that the declarations match.
-                if existing_decl_ty != this_decl_ty {
+                if !rustc_middle::ty::TyS::structurally_same_type(tcx, existing_decl_ty, this_decl_ty) {
                     let orig_fi = tcx.hir().expect_foreign_item(existing_hid);
                     let orig = Self::name_of_extern_decl(tcx, orig_fi);
 
@@ -2152,9 +2151,9 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ClashingExternDecl {
                         get_relevant_span(this_fi),
                         |lint| {
                             let mut expected_str = DiagnosticStyledString::new();
-                            expected_str.push(existing_decl_ty.to_string(), false);
+                            expected_str.push(existing_decl_ty.fn_sig(tcx).to_string(), false);
                             let mut found_str = DiagnosticStyledString::new();
-                            found_str.push(this_decl_ty.to_string(), true);
+                            found_str.push(this_decl_ty.fn_sig(tcx).to_string(), true);
 
                             lint.build(&format!(
                                 "`{}` redeclare{} with a different signature",

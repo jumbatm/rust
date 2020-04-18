@@ -789,6 +789,89 @@ impl<'tcx> ty::TyS<'tcx> {
         }
     }
 
+    /// Like same_type, but checks whether two types are structurally equal. For Adts, two types
+    /// are structually same if they are composed of the same primitive types in the same order,
+    /// and/or composed of structurally same types. For function types, they are structurally same
+    /// if their inputs and output are structurally same.
+    // TODO: Should this be moved into its own query? We need a tcx anyway.
+    pub fn structurally_same_type(tcx: TyCtxt<'tcx>, a: Ty<'tcx>, b: Ty<'tcx>) -> bool {
+        if a == b || Self::same_type(a, b) {
+            // All nominally-same types are structurally same, too.
+            true
+        } else {
+            // Do a full, depth-first comparison between the two.
+            use super::TyKind::*;
+            let a_kind = &a.kind;
+            let b_kind = &b.kind;
+
+
+            match (a_kind, b_kind) {
+                (Adt(a_adtdef, a_substs), Adt(b_adtdef, b_substs)) => {
+                    // An Adt is structurally equal if it is made up of members that themselves are
+                    // structurally equal.
+                    // Check substs first.
+                    a_substs.types().zip(b_substs.types()).all(|(a_ty, b_ty)| Self::structurally_same_type(tcx, a_ty, b_ty))
+                        &&
+                    a_adtdef.variants.iter()
+                        .zip(b_adtdef.variants.iter())
+                        .flat_map(|(a, b)| {
+                            a.fields.iter().zip(b.fields.iter())
+                        })
+                        .all(|(a, b)| {
+                            Self::structurally_same_type(tcx, tcx.type_of(a.did), tcx.type_of(b.did))
+                        })
+                }
+                (Array(a_ty, a_const), Array(b_ty, b_const)) => {
+                    a_const.val == b_const.val
+                        &&
+                    Self::structurally_same_type(tcx, a_const.ty, b_const.ty)
+                        &&
+                    Self::structurally_same_type(tcx, a_ty, b_ty)
+                }
+                (Slice(a_ty), Slice(b_ty)) => {
+                    Self::structurally_same_type(tcx, a_ty, b_ty)
+                }
+                (RawPtr(a_tymut), RawPtr(b_tymut)) => {
+                    a_tymut.mutbl == a_tymut.mutbl && Self::structurally_same_type(tcx, &a_tymut.ty, &b_tymut.ty)
+                }
+                (Ref(a_region, a_ty, a_mut), Ref(b_region, b_ty, b_mut)) => {
+                    a_region == b_region
+                        &&
+                    a_mut == b_mut
+                        &&
+                    Self::structurally_same_type(tcx, a_ty, b_ty)
+                }
+                (FnDef(..), FnDef(..)) => {
+                    let a_sig = a.fn_sig(tcx).no_bound_vars().expect("no bound vars");
+                    let b_sig = b.fn_sig(tcx).no_bound_vars().expect("no bound vars");
+
+                    (a_sig.abi, a_sig.unsafety, a_sig.c_variadic) == (b_sig.abi, b_sig.unsafety, b_sig.c_variadic)
+                        &&
+                    a_sig.inputs().iter().zip(b_sig.inputs().iter()).all(|(a, b)| {
+                        Self::structurally_same_type(tcx, a, b)
+                    })
+                        &&
+                    Self::structurally_same_type(tcx, a_sig.output(), b_sig.output())
+                }
+                (Tuple(a_substs), Tuple(b_substs)) => {
+                    a_substs.types().zip(b_substs.types()).all(|(a_ty, b_ty)| Self::structurally_same_type(tcx, a_ty, b_ty))
+                },
+                // For these, it's not quite as easy to define structural-sameness quite so easily.
+                (Dynamic(..), Dynamic(..))
+                    | (Closure(..), Closure(..))
+                    | (Generator(..), Generator(..))
+                    | (GeneratorWitness(..), GeneratorWitness(..))
+                    | (Projection(..), Projection(..))
+                    | (UnnormalizedProjection(..), UnnormalizedProjection(..))
+                    | (Opaque(..), Opaque(..)) => false,
+                // These should have been caught above.
+                (Bool, Bool) | (Char, Char) | (Never, Never) | (Str, Str) | (Error, Error) => { unreachable!() },
+                // We'll default to false to be safe.
+                _ => false,
+            }
+        }
+    }
+
     /// Check whether a type is representable. This means it cannot contain unboxed
     /// structural recursion. This check is needed for structs and enums.
     pub fn is_representable(&'tcx self, tcx: TyCtxt<'tcx>, sp: Span) -> Representability {

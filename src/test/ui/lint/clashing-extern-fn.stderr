@@ -93,3 +93,5 @@ LL |         fn variadic_decl(x: u8);
    = note: expected  `unsafe extern "C" fn(u8, ...)`
               found  `unsafe extern "C" fn(u8)`
 
+warning: 7 warnings emitted
+
