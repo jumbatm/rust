@@ -2116,6 +2116,87 @@ impl ClashingExternDecl {
             SymbolName::Normal(fi.ident.name)
         }
     }
+
+    /// Checks whether two types are structurally the same enough that the declarations shouldn't
+    /// clash. We need this so we don't emit a lint when two modules both declare an extern struct,
+    /// with the same members (as the declarations shouldn't clash).
+    fn structurally_same_type<'tcx>(tcx: TyCtxt<'tcx>, a: Ty<'tcx>, b: Ty<'tcx>) -> bool {
+        if a == b || rustc_middle::ty::TyS::same_type(a, b) {
+            // All nominally-same types are structurally same, too.
+            true
+        } else {
+            // Do a full, depth-first comparison between the two.
+            use rustc_middle::ty::TyKind::*;
+            let a_kind = &a.kind;
+            let b_kind = &b.kind;
+
+            match (a_kind, b_kind) {
+                (Adt(a_adtdef, a_substs), Adt(b_adtdef, b_substs)) => {
+                    // An Adt is structurally equal if it is made up of members that themselves are
+                    // structurally equal.
+                    // Check substs first.
+                    a_substs.types().zip(b_substs.types()).all(|(a_ty, b_ty)| Self::structurally_same_type(tcx, a_ty, b_ty))
+                        &&
+                    a_adtdef.variants.iter()
+                        .zip(b_adtdef.variants.iter())
+                        .flat_map(|(a, b)| {
+                            a.fields.iter().zip(b.fields.iter())
+                        })
+                        .all(|(a, b)| {
+                            Self::structurally_same_type(tcx, tcx.type_of(a.did), tcx.type_of(b.did))
+                        })
+                }
+                (Array(a_ty, a_const), Array(b_ty, b_const)) => {
+                    a_const.val == b_const.val
+                        &&
+                    Self::structurally_same_type(tcx, a_const.ty, b_const.ty)
+                        &&
+                    Self::structurally_same_type(tcx, a_ty, b_ty)
+                }
+                (Slice(a_ty), Slice(b_ty)) => {
+                    Self::structurally_same_type(tcx, a_ty, b_ty)
+                }
+                (RawPtr(a_tymut), RawPtr(b_tymut)) => {
+                    a_tymut.mutbl == a_tymut.mutbl && Self::structurally_same_type(tcx, &a_tymut.ty, &b_tymut.ty)
+                }
+                (Ref(a_region, a_ty, a_mut), Ref(b_region, b_ty, b_mut)) => {
+                    a_region == b_region
+                        &&
+                    a_mut == b_mut
+                        &&
+                    Self::structurally_same_type(tcx, a_ty, b_ty)
+                }
+                (FnDef(..), FnDef(..)) => {
+                    let a_sig = a.fn_sig(tcx).no_bound_vars().expect("no bound vars");
+                    let b_sig = b.fn_sig(tcx).no_bound_vars().expect("no bound vars");
+
+                    (a_sig.abi, a_sig.unsafety, a_sig.c_variadic) == (b_sig.abi, b_sig.unsafety, b_sig.c_variadic)
+                        &&
+                    a_sig.inputs().iter().zip(b_sig.inputs().iter()).all(|(a, b)| {
+                        Self::structurally_same_type(tcx, a, b)
+                    })
+                        &&
+                    Self::structurally_same_type(tcx, a_sig.output(), b_sig.output())
+                }
+                (Tuple(a_substs), Tuple(b_substs)) => {
+                    a_substs.types().zip(b_substs.types()).all(|(a_ty, b_ty)| Self::structurally_same_type(tcx, a_ty, b_ty))
+                },
+                // For these, it's not quite as easy to define structural-sameness quite so easily.
+                // For the purposes of this lint, take the conservative approach and mark them as
+                // not structurally same.
+                (Dynamic(..), Dynamic(..))
+                    | (Closure(..), Closure(..))
+                    | (Generator(..), Generator(..))
+                    | (GeneratorWitness(..), GeneratorWitness(..))
+                    | (Projection(..), Projection(..))
+                    | (UnnormalizedProjection(..), UnnormalizedProjection(..))
+                    | (Opaque(..), Opaque(..)) => false,
+                // These definitely should have been caught above.
+                (Bool, Bool) | (Char, Char) | (Never, Never) | (Str, Str) | (Error, Error) => { unreachable!() },
+                _ => false,
+            }
+        }
+    }
 }
 
 impl_lint_pass!(ClashingExternDecl => [CLASHING_EXTERN_DECL]);
@@ -2133,7 +2214,7 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for ClashingExternDecl {
                     existing_hid, existing_decl_ty, this_fi.hir_id, this_decl_ty
                 );
                 // Check that the declarations match.
-                if !rustc_middle::ty::TyS::structurally_same_type(tcx, existing_decl_ty, this_decl_ty) {
+                if !Self::structurally_same_type(tcx, existing_decl_ty, this_decl_ty) {
                     let orig_fi = tcx.hir().expect_foreign_item(existing_hid);
                     let orig = Self::name_of_extern_decl(tcx, orig_fi);
 
