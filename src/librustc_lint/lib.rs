@@ -30,6 +30,7 @@
 #![feature(bool_to_option)]
 #![feature(box_syntax)]
 #![feature(crate_visibility_modifier)]
+#![feature(iter_order_by)]
 #![feature(never_type)]
 #![feature(nll)]
 #![recursion_limit = "256"]

@@ -2135,15 +2135,13 @@ impl ClashingExternDecl {
                     // An Adt is structurally equal if it is made up of members that themselves are
                     // structurally equal.
                     // Check substs first.
-                    a_substs.types().zip(b_substs.types()).all(|(a_ty, b_ty)| Self::structurally_same_type(tcx, a_ty, b_ty))
+                    a_substs.types().eq_by(b_substs.types(), |a_ty, b_ty| Self::structurally_same_type(tcx, a_ty, b_ty))
                         &&
                     a_adtdef.variants.iter()
-                        .zip(b_adtdef.variants.iter())
-                        .flat_map(|(a, b)| {
-                            a.fields.iter().zip(b.fields.iter())
-                        })
-                        .all(|(a, b)| {
-                            Self::structurally_same_type(tcx, tcx.type_of(a.did), tcx.type_of(b.did))
+                        .eq_by(b_adtdef.variants.iter(), |a, b| {
+                            a.fields.iter().eq_by(b.fields.iter(), |a, b| {
+                                Self::structurally_same_type(tcx, tcx.type_of(a.did), tcx.type_of(b.did))
+                            })
                         })
                 }
                 (Array(a_ty, a_const), Array(b_ty, b_const)) => {
@@ -2172,7 +2170,7 @@ impl ClashingExternDecl {
 
                     (a_sig.abi, a_sig.unsafety, a_sig.c_variadic) == (b_sig.abi, b_sig.unsafety, b_sig.c_variadic)
                         &&
-                    a_sig.inputs().iter().zip(b_sig.inputs().iter()).all(|(a, b)| {
+                    a_sig.inputs().iter().eq_by(b_sig.inputs().iter(), |a, b| {
                         Self::structurally_same_type(tcx, a, b)
                     })
                         &&
