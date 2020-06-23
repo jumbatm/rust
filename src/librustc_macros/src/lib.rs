@@ -11,6 +11,7 @@ mod query;
 mod serialize;
 mod symbols;
 mod type_foldable;
+mod as_session_error_derive;
 
 #[proc_macro]
 pub fn rustc_queries(input: TokenStream) -> TokenStream {
@@ -36,3 +37,4 @@ decl_derive!([MetadataDecodable] => serialize::meta_decodable_derive);
 decl_derive!([MetadataEncodable] => serialize::meta_encodable_derive);
 decl_derive!([TypeFoldable, attributes(type_foldable)] => type_foldable::type_foldable_derive);
 decl_derive!([Lift, attributes(lift)] => lift::lift_derive);
+decl_derive!([AsSessionError, attributes(code, error, label, suggestion)] => as_session_error_derive::as_session_error_derive);

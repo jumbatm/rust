@@ -1,5 +1,6 @@
 #![feature(crate_visibility_modifier)]
 #![feature(or_patterns)]
+#![feature(trait_alias)]
 
 #[macro_use]
 extern crate bitflags;

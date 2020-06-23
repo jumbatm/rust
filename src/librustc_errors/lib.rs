@@ -41,6 +41,15 @@ mod snippet;
 mod styled_buffer;
 pub use snippet::Style;
 
+/// Trait implemented by error types. See [rustc_builtin_macros::as_error_derive].
+pub trait AsError<'a> {
+    type Session;
+
+    /// Write out as a diagnostic out of `sess`.
+    #[must_use]
+    fn as_error(self, sess: &'a Self::Session) -> DiagnosticBuilder<'a>;
+}
+
 pub type PResult<'a, T> = Result<T, DiagnosticBuilder<'a>>;
 
 // `PResult` is used a lot. Make sure it doesn't unintentionally get bigger.
