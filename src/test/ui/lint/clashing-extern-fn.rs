@@ -184,3 +184,58 @@ mod sameish_members {
         }
     }
 }
+
+mod aggregate {
+    mod a {
+        #[repr(C)]
+        struct Point3 {
+            x: f32,
+            y: f32,
+            z: f32,
+        }
+
+        #[repr(C)]
+        struct Vec3 {
+            origin: Point3,
+            direction: Point3,
+            visible: bool
+        }
+
+        extern "C" { fn point_at_origin() -> Vec3; }
+    }
+
+    mod b {
+        #[repr(C)]
+        struct Point3 {
+            x: f32,
+            y: f32,
+            z: f32,
+        }
+
+        #[repr(C)]
+        struct Vec3 {
+            origin: Point3,
+            direction: Point3,
+            visible: bool
+        }
+        // Should not warn -- the redeclaration above is correct.
+        extern "C" { fn point_at_origin() -> Vec3; }
+    }
+    mod c {
+        #[repr(C)]
+        struct Point3 {
+            x: i32,
+            y: i32,
+            z: i32, // NOTE: Incorrectly redeclared as i32
+        }
+
+        #[repr(C)]
+        struct Vec3 {
+            origin: Point3,
+            direction: Point3,
+            visible: bool
+        }
+        extern "C" { fn point_at_origin() -> Vec3; }
+        //~^ WARN `point_at_origin` redeclared with a different signature
+    }
+}
