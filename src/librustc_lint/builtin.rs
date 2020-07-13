@@ -2142,12 +2142,13 @@ impl ClashingExternDeclarations {
             let b_kind = &b.kind;
 
             use rustc_target::abi::LayoutOf;
-            let compare_layouts = |a, b| {
-                let a_layout = &cx.layout_of(a).unwrap().layout.abi;
-                let b_layout = &cx.layout_of(b).unwrap().layout.abi;
-                let result = a_layout == b_layout;
-                result
+            let compare_layouts = |a, b| -> bool {
+                &cx.layout_of(a).unwrap().layout.abi == &cx.layout_of(b).unwrap().layout.abi
             };
+
+            #[allow(rustc::usage_of_ty_tykind)]
+            let is_primitive_or_pointer =
+                |kind: &ty::TyKind<'_>| kind.is_primitive() || matches!(kind, RawPtr(..));
 
             match (a_kind, b_kind) {
                 (Adt(..), Adt(..)) => compare_layouts(a, b),
@@ -2196,58 +2197,27 @@ impl ClashingExternDeclarations {
                 | (GeneratorWitness(..), GeneratorWitness(..))
                 | (Projection(..), Projection(..))
                 | (Opaque(..), Opaque(..)) => false,
+
                 // These definitely should have been caught above.
                 (Bool, Bool) | (Char, Char) | (Never, Never) | (Str, Str) => unreachable!(),
 
-                // Disjoint kinds.
-                (_, _) => {
-                    // First, check if the conversion is FFI-safe. This can happen if the type is an
-                    // enum with a non-null field (see improper_ctypes).
-                    let is_primitive_or_pointer =
-                        |ty: Ty<'tcx>| ty.is_primitive() || matches!(ty.kind, RawPtr(..));
-                    if (is_primitive_or_pointer(a) || is_primitive_or_pointer(b))
-                        && !(is_primitive_or_pointer(a) && is_primitive_or_pointer(b))
-                        && (matches!(a_kind, Adt(..)) || matches!(b_kind, Adt(..)))
-                    /* ie, 1 adt and 1 primitive */
-                    {
-                        let (primitive_ty, adt_ty) =
-                            if is_primitive_or_pointer(a) { (a, b) } else { (b, a) };
-                        // First, check that the Adt is FFI-safe to use.
-                        use crate::types::{ImproperCTypesMode, ImproperCTypesVisitor};
-                        let vis =
-                            ImproperCTypesVisitor { cx, mode: ImproperCTypesMode::Declarations };
-
-                        if let Adt(def, substs) = adt_ty.kind {
-                            let repr_nullable = vis.is_repr_nullable_ptr(adt_ty, def, substs);
-                            if let Some(safe_ty) = repr_nullable {
-                                let safe_ty_layout = &cx.layout_of(safe_ty).unwrap();
-                                let primitive_ty_layout = &cx.layout_of(primitive_ty).unwrap();
-
-                                use rustc_target::abi::Abi::*;
-                                match (&safe_ty_layout.abi, &primitive_ty_layout.abi) {
-                                    (Scalar(safe), Scalar(primitive)) => {
-                                        // The two types are safe to convert between if `safe` is
-                                        // the non-zero version of `primitive`.
-                                        use std::ops::RangeInclusive;
-
-                                        let safe_range: &RangeInclusive<_> = &safe.valid_range;
-                                        let primitive_range: &RangeInclusive<_> =
-                                            &primitive.valid_range;
-
-                                        return primitive_range.end() == safe_range.end()
-                                            // This check works for both signed and unsigned types due to wraparound.
-                                            && *safe_range.start() == 1
-                                            && *primitive_range.start() == 0;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
+                // An Adt and a primitive type. This can be FFI-safe is the ADT is an enum with a
+                // non-null field.
+                (Adt(..), other_kind) | (other_kind, Adt(..))
+                    if is_primitive_or_pointer(other_kind) =>
+                {
+                    let (primitive, adt) =
+                        if is_primitive_or_pointer(&a.kind) { (a, b) } else { (b, a) };
+                    if let Some(ty) = crate::types::repr_nullable_ptr(cx, adt) {
+                        ty == primitive
+                    } else {
+                        compare_layouts(a, b)
                     }
-                    // Otherwise, just compare the layouts. This may be underapproximate, but at
-                    // the very least, will stop reads into uninitialised memory.
-                    compare_layouts(a, b)
                 }
+                // Otherwise, just compare the layouts. This may fail to lint for some
+                // incompatible types, but at the very least, will stop reads into
+                // uninitialised memory.
+                _ => compare_layouts(a, b),
             }
         }
     }
