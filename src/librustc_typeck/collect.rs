@@ -835,7 +835,6 @@ fn convert_variant(
             let fid = tcx.hir().local_def_id(f.hir_id);
             let dup_span = seen_fields.get(&f.ident.normalize_to_macros_2_0()).cloned();
             if let Some(prev_span) = dup_span {
-
                 #[derive(AsSessionError)]
                 #[code = "E0124"]
                 struct FieldAlreadyDeclared {
@@ -848,14 +847,9 @@ fn convert_variant(
                 }
 
                 use rustc_errors::AsError;
-                FieldAlreadyDeclared {
-                    field_name: f.ident.to_string(),
-                    span: f.span,
-                    prev_span: prev_span,
-                }
-                .as_error(tcx.sess)
-                .emit();
-
+                FieldAlreadyDeclared { field_name: f.ident.to_string(), span: f.span, prev_span }
+                    .as_error(tcx.sess)
+                    .emit();
             } else {
                 seen_fields.insert(f.ident.normalize_to_macros_2_0(), f.span);
             }

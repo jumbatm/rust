@@ -5,13 +5,13 @@ use synstructure::decl_derive;
 
 use proc_macro::TokenStream;
 
+mod as_session_error_derive;
 mod hash_stable;
 mod lift;
 mod query;
 mod serialize;
 mod symbols;
 mod type_foldable;
-mod as_session_error_derive;
 
 #[proc_macro]
 pub fn rustc_queries(input: TokenStream) -> TokenStream {
