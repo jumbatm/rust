@@ -44,7 +44,7 @@ struct ErrorWithField {
 #[code = "E0123"]
 struct ErrorWithNonexistentField {
     #[error = "This error has a field, and references {name}"]
-    //^~ ERROR No field `name` on `ErrorWithNonexistentField`
+    //~^ ERROR no field `name` on this type
     span: Span
 }
 
@@ -59,8 +59,7 @@ struct LabelOnSpan {
 #[derive(AsSessionError)]
 #[code = "E0123"]
 #[error = "Something something"]
-struct LabelOnSpan {
+struct LabelOnNonSpan {
     #[label = "See here"]
     sp: u32 //~ ERROR The `#[label = ...]` attribute can only be applied to fields of type Span
 }
-

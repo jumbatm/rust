@@ -1,11 +1,12 @@
-
+#![allow(unreachable_code)]
+#![allow(unused)]
 use quote::format_ident;
 use quote::quote;
 
 use proc_macro::Diagnostic;
 use syn::spanned::Spanned;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Implements #[derive(AsSessionError)], which allows for errors to be specified as a struct, independent
 /// from the actual diagnostics emitting code.
@@ -177,7 +178,7 @@ impl SessionDeriveBuilderError {
     fn to_tokens(self) -> proc_macro2::TokenStream {
         let msg = match self.kind {
             SessionDeriveBuilderErrorKind::IdMultiplyProvided => {
-                "Diagnostic ID multiply provided."
+                "Diagnostic ID multiply provided"
             }
             SessionDeriveBuilderErrorKind::IdNotProvided => {
                 "Diagnostic ID not provided" // FIXME: Add help message.
@@ -223,7 +224,7 @@ impl<'a> SessionDeriveBuilder<'a> {
         let diag = self.diag;
         Ok(match attr.parse_meta()? {
             syn::Meta::NameValue(syn::MetaNameValue { lit: syn::Lit::Str(s), .. }) => {
-                let formatted_str = self.build_format(&s.value());
+                let formatted_str = self.build_format(&s.value(), attr.span());
                 let name = attr.path.segments.last().unwrap().ident.to_string();
                 let name = name.as_str();
                 match name {
@@ -271,7 +272,7 @@ impl<'a> SessionDeriveBuilder<'a> {
         let field_ty_path = if let syn::Type::Path(path) = info.ty { path } else { todo!() };
         Ok(match meta {
             syn::Meta::NameValue(syn::MetaNameValue { lit: syn::Lit::Str(s), .. }) => {
-                let formatted_str = self.build_format(&s.value());
+                let formatted_str = self.build_format(&s.value(), attr.span());
                 match name {
                     "error" => {
                         if type_matches(field_ty_path, &["rustc_span", "Span"]) {
@@ -316,12 +317,9 @@ impl<'a> SessionDeriveBuilder<'a> {
     /// format!("Expected a point greater than ({x}, {y})", x = self.x, y = self.y)
     /// ```
     /// This function builds the entire call to format!.
-    fn build_format(&self, input: &String) -> proc_macro2::TokenStream {
-        // Keep track of which fields have been referenced. First, initialise all to false:
-        let mut field_referenced: HashMap<String, bool> = HashMap::new();
-        for field_name in self.fields.iter().map(|(k, _)| k) {
-            field_referenced.insert(field_name.clone(), false);
-        }
+    fn build_format(&self, input: &String, span: proc_macro2::Span) -> proc_macro2::TokenStream {
+        // Keep track of which fields have been referenced.
+        let mut referenced_fields: HashSet<String> = HashSet::new();
 
         // At this point, we can start parsing the format string.
         let mut it = input.chars().peekable();
@@ -359,23 +357,35 @@ impl<'a> SessionDeriveBuilder<'a> {
                 };
 
                 let referenced_field = eat_argument(); // FIXME: Inline eat_argument
-                *field_referenced
-                    .get_mut(&referenced_field)
-                    .expect(&format!("`{}` is not a field in this struct", &referenced_field)) =
-                    true;
+                if !self.fields.contains_key(&referenced_field) {
+                    // This field doesn't exist. Emit a diagnostic.
+                    Diagnostic::spanned(span.unwrap(), proc_macro::Level::Error, format!("no field `{}` on this type", referenced_field)).emit();
+                }
+                // Insert into `referenced_fields` for later processing.
+                referenced_fields.insert(referenced_field);
             }
         }
-        let args = field_referenced
+        let args = referenced_fields
             .into_iter()
-            .filter_map(|(k, v)| if v { Some(k) } else { None })
             .map(|field: String| {
                 let field_ident = format_ident!("{}", field);
+                let value = if self.fields.contains_key(&field) {
+                    quote! {
+                        &self.#field_ident
+                    }
+                } else {
+                    // FIXME: This duplicates logic above where the diagnostic is created -- move
+                    // this logic above.
+                    quote! {
+                        "{field}"
+                    }
+                };
                 quote! {
-                    #field_ident = &self.#field_ident
+                    #field_ident = #value
                 }
             });
         quote! {
-        format!(#input #(,#args)*)
+            format!(#input #(,#args)*)
         }
     }
 }
