@@ -4,6 +4,9 @@
 #![feature(rustc_private)]
 #![crate_type = "lib"]
 
+extern crate rustc_span;
+use rustc_span::Span;
+
 extern crate rustc_macros;
 use rustc_macros::AsSessionError;
 
@@ -22,3 +25,42 @@ struct Hello {}
 #[code = "E0123"]
 #[code = "E0456"] //~ ERROR Diagnostic ID multiply provided
 struct ErrorSpecifiedTwice {}
+
+#[derive(AsSessionError)]
+#[error = "Hello, world!"]
+#[lint = "clashing_extern_declarations"]
+#[lint = "improper_ctypes"] //~ ERROR Diagnostic ID multiply provided
+struct LintSpecifiedTwice {}
+
+#[derive(AsSessionError)]
+#[code = "E0123"]
+struct ErrorWithField {
+    name: String,
+    #[error = "This error has a field, and references {name}"]
+    span: Span
+}
+
+#[derive(AsSessionError)]
+#[code = "E0123"]
+struct ErrorWithNonexistentField {
+    #[error = "This error has a field, and references {name}"]
+    //^~ ERROR No field `name` on `ErrorWithNonexistentField`
+    span: Span
+}
+
+#[derive(AsSessionError)]
+#[code = "E0123"]
+#[error = "Something something"]
+struct LabelOnSpan {
+    #[label = "See here"]
+    sp: Span
+}
+
+#[derive(AsSessionError)]
+#[code = "E0123"]
+#[error = "Something something"]
+struct LabelOnSpan {
+    #[label = "See here"]
+    sp: u32 //~ ERROR The `#[label = ...]` attribute can only be applied to fields of type Span
+}
+
