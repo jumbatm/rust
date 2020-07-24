@@ -1,6 +1,9 @@
+
 use quote::format_ident;
 use quote::quote;
 
+use proc_macro::Diagnostic;
+use syn::spanned::Spanned;
 
 use std::collections::HashMap;
 
@@ -52,7 +55,7 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
     let preamble: Vec<_> = attrs
         .iter()
         .map(|attr| {
-            builder.generate_structure_code(attr, VariantInfo { ident: &ast.ident }).unwrap()
+            builder.generate_structure_code(attr, VariantInfo { ident: &ast.ident }).unwrap_or_else(|v| v.to_tokens())
         })
         .collect();
 
@@ -71,7 +74,7 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
                         ty: &field.ty,
                     },
                 )
-                .unwrap()
+                .unwrap_or_else(|v| v.to_tokens())
         });
         return quote! {
             #(#result);*
@@ -79,7 +82,7 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
     });
     // Finally, put it all together.
     let implementation = match builder.kind {
-        None => Err(SessionDeriveBuilderError::IdNotProvided),
+        None => Err(SessionDeriveBuilderError { kind: SessionDeriveBuilderErrorKind::IdNotProvided, span: s.ast().span() }),
         Some(kind) => Ok(match kind {
             DiagnosticId::Lint(_tokens) => todo!(),
             DiagnosticId::Error(code) => {
@@ -93,8 +96,12 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
                 }
             }
         }),
-    }
-    .unwrap_or_else(|_| todo!("Proper error handling"));
+    };
+
+    let implementation = match implementation {
+        Ok(x) => x,
+        Err(e) => e.to_tokens()
+    };
 
     s.gen_impl(quote! {
         gen impl<'a> rustc_errors::AsError<'a> for @Self {
@@ -152,15 +159,44 @@ enum DiagnosticId {
 }
 
 #[derive(Debug)]
-enum SessionDeriveBuilderError {
+enum SessionDeriveBuilderErrorKind {
     SynError(syn::Error),
     IdNotProvided,
     IdMultiplyProvided,
 }
 
+
+#[derive(Debug)]
+struct SessionDeriveBuilderError {
+    kind: SessionDeriveBuilderErrorKind,
+    span: proc_macro2::Span,
+}
+
+impl SessionDeriveBuilderError {
+    // FIXME: Implement ToTokens?
+    fn to_tokens(self) -> proc_macro2::TokenStream {
+        let msg = match self.kind {
+            SessionDeriveBuilderErrorKind::IdMultiplyProvided => {
+                "Diagnostic ID multiply provided."
+            }
+            SessionDeriveBuilderErrorKind::IdNotProvided => {
+                "Diagnostic ID not provided" // FIXME: Add help message.
+            }
+            SessionDeriveBuilderErrorKind::SynError(e) => {
+                return e.to_compile_error();
+            }
+        };
+        Diagnostic::spanned(self.span.unwrap(), proc_macro::Level::Error, msg).emit();
+        return quote!();
+    }
+}
+
 impl std::convert::From<syn::Error> for SessionDeriveBuilderError {
     fn from(e: syn::Error) -> Self {
-        SessionDeriveBuilderError::SynError(e)
+        SessionDeriveBuilderError {
+            span: e.span(),
+            kind: SessionDeriveBuilderErrorKind::SynError(e),
+        }
     }
 }
 
@@ -197,7 +233,7 @@ impl<'a> SessionDeriveBuilder<'a> {
                         }
                     }
                     "code" => {
-                        self.set_kind_once(DiagnosticId::Error(formatted_str))?;
+                        self.set_kind_once(DiagnosticId::Error(formatted_str), attr.span())?;
                         // This attribute is only allowed to be applied once, and the attribute
                         // will be set in the initialisation code.
                         quote! {}
@@ -211,12 +247,12 @@ impl<'a> SessionDeriveBuilder<'a> {
     }
 
     #[must_use]
-    fn set_kind_once(&mut self, kind: DiagnosticId) -> Result<(), SessionDeriveBuilderError> {
+    fn set_kind_once(&mut self, kind: DiagnosticId, span: proc_macro2::Span) -> Result<(), SessionDeriveBuilderError> {
         if self.kind.is_none() {
             self.kind = Some(kind);
             Ok(())
         } else {
-            Err(SessionDeriveBuilderError::IdMultiplyProvided)
+            Err(SessionDeriveBuilderError { kind: SessionDeriveBuilderErrorKind::IdMultiplyProvided, span })
         }
     }
 
