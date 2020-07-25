@@ -45,7 +45,7 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
     let attrs = &ast.attrs;
     let fields: &syn::Fields = if let syn::Data::Struct(syn::DataStruct { fields, .. }) = &ast.data
     {
-       fields
+        fields
     } else {
         todo!()
     };
@@ -56,7 +56,9 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
     let preamble: Vec<_> = attrs
         .iter()
         .map(|attr| {
-            builder.generate_structure_code(attr, VariantInfo { ident: &ast.ident }).unwrap_or_else(|v| v.to_tokens())
+            builder
+                .generate_structure_code(attr, VariantInfo { ident: &ast.ident })
+                .unwrap_or_else(|v| v.to_tokens())
         })
         .collect();
 
@@ -69,11 +71,7 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
             builder
                 .generate_field_code(
                     attr,
-                    FieldInfo {
-                        vis: &field.vis,
-                        binding: field_binding,
-                        ty: &field.ty,
-                    },
+                    FieldInfo { vis: &field.vis, binding: field_binding, ty: &field.ty },
                 )
                 .unwrap_or_else(|v| v.to_tokens())
         });
@@ -83,9 +81,12 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
     });
     // Finally, put it all together.
     let implementation = match builder.kind {
-        None => Err(SessionDeriveBuilderError { kind: SessionDeriveBuilderErrorKind::IdNotProvided, span: s.ast().span() }),
+        None => Err(SessionDeriveBuilderError {
+            kind: SessionDeriveBuilderErrorKind::IdNotProvided,
+            span: s.ast().span(),
+        }),
         Some(kind) => Ok(match kind {
-            DiagnosticId::Lint(_tokens) => todo!(),
+            DiagnosticId::Lint(_lint) => todo!(),
             DiagnosticId::Error(code) => {
                 quote! {
                     let mut #diag = #sess.struct_err_with_code("", rustc_errors::DiagnosticId::Error(#code));
@@ -101,7 +102,7 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
 
     let implementation = match implementation {
         Ok(x) => x,
-        Err(e) => e.to_tokens()
+        Err(e) => e.to_tokens(),
     };
 
     s.gen_impl(quote! {
@@ -166,7 +167,6 @@ enum SessionDeriveBuilderErrorKind {
     IdMultiplyProvided,
 }
 
-
 #[derive(Debug)]
 struct SessionDeriveBuilderError {
     kind: SessionDeriveBuilderErrorKind,
@@ -177,9 +177,7 @@ impl SessionDeriveBuilderError {
     // FIXME: Implement ToTokens?
     fn to_tokens(self) -> proc_macro2::TokenStream {
         let msg = match self.kind {
-            SessionDeriveBuilderErrorKind::IdMultiplyProvided => {
-                "Diagnostic ID multiply provided"
-            }
+            SessionDeriveBuilderErrorKind::IdMultiplyProvided => "Diagnostic ID multiply provided",
             SessionDeriveBuilderErrorKind::IdNotProvided => {
                 "Diagnostic ID not provided" // FIXME: Add help message.
             }
@@ -213,7 +211,7 @@ impl<'a> SessionDeriveBuilder<'a> {
             }
         }
 
-        Self { diag, fields: fields_map, kind: None, }
+        Self { diag, fields: fields_map, kind: None }
     }
 
     fn generate_structure_code(
@@ -239,7 +237,11 @@ impl<'a> SessionDeriveBuilder<'a> {
                         // will be set in the initialisation code.
                         quote! {}
                     }
-                    "lint" => todo!(),
+                    "lint" => {
+                        self.set_kind_once(DiagnosticId::Lint(formatted_str), attr.span())?;
+                        // As with `code`, this attribute is only allowed once.
+                        quote! {}
+                    }
                     _ => unimplemented!(),
                 }
             }
@@ -248,12 +250,19 @@ impl<'a> SessionDeriveBuilder<'a> {
     }
 
     #[must_use]
-    fn set_kind_once(&mut self, kind: DiagnosticId, span: proc_macro2::Span) -> Result<(), SessionDeriveBuilderError> {
+    fn set_kind_once(
+        &mut self,
+        kind: DiagnosticId,
+        span: proc_macro2::Span,
+    ) -> Result<(), SessionDeriveBuilderError> {
         if self.kind.is_none() {
             self.kind = Some(kind);
             Ok(())
         } else {
-            Err(SessionDeriveBuilderError { kind: SessionDeriveBuilderErrorKind::IdMultiplyProvided, span })
+            Err(SessionDeriveBuilderError {
+                kind: SessionDeriveBuilderErrorKind::IdMultiplyProvided,
+                span,
+            })
         }
     }
 
@@ -292,7 +301,8 @@ impl<'a> SessionDeriveBuilder<'a> {
                                 #diag.span_label(*#field_binding, #formatted_str);
                             }
                         } else {
-                            todo!("Error: Label applied to non-Span field ({:?})", field_ty_path)
+                            Diagnostic::spanned(attr.span().unwrap(), proc_macro::Level::Error, "The `#[label = ...]` attribute can only be applied to fields of type Span").emit();
+                            quote!()
                         }
                     }
                     other => todo!("Unrecognised field: {}", other),
@@ -359,31 +369,34 @@ impl<'a> SessionDeriveBuilder<'a> {
                 let referenced_field = eat_argument(); // FIXME: Inline eat_argument
                 if !self.fields.contains_key(&referenced_field) {
                     // This field doesn't exist. Emit a diagnostic.
-                    Diagnostic::spanned(span.unwrap(), proc_macro::Level::Error, format!("no field `{}` on this type", referenced_field)).emit();
+                    Diagnostic::spanned(
+                        span.unwrap(),
+                        proc_macro::Level::Error,
+                        format!("no field `{}` on this type", referenced_field),
+                    )
+                    .emit();
                 }
                 // Insert into `referenced_fields` for later processing.
                 referenced_fields.insert(referenced_field);
             }
         }
-        let args = referenced_fields
-            .into_iter()
-            .map(|field: String| {
-                let field_ident = format_ident!("{}", field);
-                let value = if self.fields.contains_key(&field) {
-                    quote! {
-                        &self.#field_ident
-                    }
-                } else {
-                    // FIXME: This duplicates logic above where the diagnostic is created -- move
-                    // this logic above.
-                    quote! {
-                        "{field}"
-                    }
-                };
+        let args = referenced_fields.into_iter().map(|field: String| {
+            let field_ident = format_ident!("{}", field);
+            let value = if self.fields.contains_key(&field) {
                 quote! {
-                    #field_ident = #value
+                    &self.#field_ident
                 }
-            });
+            } else {
+                // FIXME: This duplicates logic above where the diagnostic is created -- move
+                // this logic above.
+                quote! {
+                    "{#field}"
+                }
+            };
+            quote! {
+                #field_ident = #value
+            }
+        });
         quote! {
             format!(#input #(,#args)*)
         }

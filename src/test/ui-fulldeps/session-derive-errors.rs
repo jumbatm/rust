@@ -26,11 +26,14 @@ struct Hello {}
 #[code = "E0456"] //~ ERROR Diagnostic ID multiply provided
 struct ErrorSpecifiedTwice {}
 
+// FIXME: Uncomment when emitting lints is supported.
+/*
 #[derive(AsSessionError)]
 #[error = "Hello, world!"]
 #[lint = "clashing_extern_declarations"]
-#[lint = "improper_ctypes"] //~ ERROR Diagnostic ID multiply provided
+#[lint = "improper_ctypes"] // FIXME: ERROR Diagnostic ID multiply provided
 struct LintSpecifiedTwice {}
+*/
 
 #[derive(AsSessionError)]
 #[code = "E0123"]
@@ -61,5 +64,6 @@ struct LabelOnSpan {
 #[error = "Something something"]
 struct LabelOnNonSpan {
     #[label = "See here"]
-    sp: u32 //~ ERROR The `#[label = ...]` attribute can only be applied to fields of type Span
+    //~^ ERROR The `#[label = ...]` attribute can only be applied to fields of type Span
+    id: u32,
 }
