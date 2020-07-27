@@ -6,9 +6,13 @@
 
 extern crate rustc_span;
 use rustc_span::Span;
+use rustc_span::symbol::Ident;
 
 extern crate rustc_macros;
 use rustc_macros::AsSessionError;
+
+extern crate rustc_middle;
+use rustc_middle::ty::Ty;
 
 // The macro doesn't pull these crates in itself, because most internal use within the compiler is
 // from contexts where referencing the crates is enough anyway.
@@ -66,4 +70,18 @@ struct LabelOnNonSpan {
     #[label = "See here"]
     //~^ ERROR The `#[label = ...]` attribute can only be applied to fields of type Span
     id: u32,
+}
+
+#[derive(AsSessionError)]
+#[code = "E0456"]
+struct MoveOutOfBorrowError<'tcx> {
+    name: Ident,
+    ty: Ty<'tcx>,
+    #[error = "cannot move {ty} out of borrow"]
+    #[label = "cannot move out of borrow"]
+    span: Span,
+    #[label = "`{ty}` first borrowed here"]
+    other_span: Span,
+    #[suggestion(message = "consider cloning here", code = "{name}.clone()")]
+    suggestion: (Span, Applicability),
 }
