@@ -109,8 +109,7 @@ struct SessionDeriveBuilderError {
 }
 
 impl SessionDeriveBuilderError {
-    // FIXME: Implement ToTokens?
-    fn to_tokens(self) -> proc_macro2::TokenStream {
+    fn to_compile_error(self) -> proc_macro2::TokenStream {
         let msg = match self.kind {
             SessionDeriveBuilderErrorKind::IdMultiplyProvided => "Diagnostic ID multiply provided",
             SessionDeriveBuilderErrorKind::IdNotProvided => {
@@ -173,7 +172,7 @@ impl<'a> SessionDeriveBuilder<'a> {
             .map(|attr| {
                 state
                     .generate_structure_code(attr, VariantInfo { ident: &ast.ident })
-                    .unwrap_or_else(|v| v.to_tokens())
+                    .unwrap_or_else(|v| v.to_compile_error())
             })
             .collect();
 
@@ -185,7 +184,7 @@ impl<'a> SessionDeriveBuilder<'a> {
                         attr,
                         FieldInfo { vis: &field.vis, binding: field_binding, ty: &field.ty },
                     )
-                    .unwrap_or_else(|v| v.to_tokens())
+                    .unwrap_or_else(|v| v.to_compile_error())
             });
             return quote! {
                 #(#result);*
@@ -217,7 +216,7 @@ impl<'a> SessionDeriveBuilder<'a> {
 
         let implementation = match implementation {
             Ok(x) => x,
-            Err(e) => e.to_tokens(),
+            Err(e) => e.to_compile_error(),
         };
 
         structure.gen_impl(quote! {
