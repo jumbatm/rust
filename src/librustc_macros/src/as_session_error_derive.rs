@@ -282,7 +282,10 @@ impl<'a> SessionDeriveBuilder<'a> {
 
         let option_ty = option_inner_ty(&info.ty);
 
-        let generated_code = self.generate_non_option_field_code(attr, FieldInfo { vis: info.vis, binding: info.binding, ty: option_ty.unwrap_or(&info.ty) })?;
+        let generated_code = self.generate_non_option_field_code(
+            attr,
+            FieldInfo { vis: info.vis, binding: info.binding, ty: option_ty.unwrap_or(&info.ty) },
+        )?;
         Ok(if option_ty.is_none() {
             quote! { #generated_code }
         } else {
@@ -393,7 +396,13 @@ impl<'a> SessionDeriveBuilder<'a> {
                                 if let syn::MetaNameValue { lit: syn::Lit::Str(s), .. } =
                                     arg_name_value
                                 {
-                                    let name = arg_name_value.path.segments.last().unwrap().ident.to_string();
+                                    let name = arg_name_value
+                                        .path
+                                        .segments
+                                        .last()
+                                        .unwrap()
+                                        .ident
+                                        .to_string();
                                     let name = name.as_str();
                                     let formatted_str = self.build_format(&s.value(), arg.span());
                                     match name {
@@ -411,8 +420,10 @@ impl<'a> SessionDeriveBuilder<'a> {
                                 }
                             }
                         }
-                        let msg = msg
-                            .map_or_else(|| unimplemented!("Error: missing suggestion message"), |m| quote!(#m.as_str()));
+                        let msg = msg.map_or_else(
+                            || unimplemented!("Error: missing suggestion message"),
+                            |m| quote!(#m.as_str()),
+                        );
 
                         let code = code.unwrap_or_else(|| quote! { String::new() });
                         // Now build it out:
@@ -445,7 +456,6 @@ impl<'a> SessionDeriveBuilder<'a> {
     /// ```
     /// This function builds the entire call to format!.
     fn build_format(&self, input: &String, span: proc_macro2::Span) -> proc_macro2::TokenStream {
-        // Keep track of which fields have been referenced.
         let mut referenced_fields: HashSet<String> = HashSet::new();
 
         // At this point, we can start parsing the format string.
@@ -484,19 +494,12 @@ impl<'a> SessionDeriveBuilder<'a> {
                 };
 
                 let referenced_field = eat_argument(); // FIXME: Inline eat_argument
-                if !self.fields.contains_key(&referenced_field) {
-                    // This field doesn't exist. Emit a diagnostic.
-                    Diagnostic::spanned(
-                        span.unwrap(),
-                        proc_macro::Level::Error,
-                        format!("no field `{}` on this type", referenced_field),
-                    )
-                    .emit();
-                }
-                // Insert into `referenced_fields` for later processing.
                 referenced_fields.insert(referenced_field);
             }
         }
+        // At this point, `referenced_fields` contains a set of the unique fields that were
+        // referenced in the format string. Generate the corresponding "x = self.x" format
+        // string parameters:
         let args = referenced_fields.into_iter().map(|field: String| {
             let field_ident = format_ident!("{}", field);
             let value = if self.fields.contains_key(&field) {
@@ -504,8 +507,13 @@ impl<'a> SessionDeriveBuilder<'a> {
                     &self.#field_ident
                 }
             } else {
-                // FIXME: This duplicates logic above where the diagnostic is created -- move
-                // this logic above.
+                // This field doesn't exist. Emit a diagnostic.
+                Diagnostic::spanned(
+                    span.unwrap(),
+                    proc_macro::Level::Error,
+                    format!("no field `{}` on this type", field),
+                )
+                .emit();
                 quote! {
                     "{#field}"
                 }
@@ -527,8 +535,6 @@ fn option_inner_ty(ty: &syn::Type) -> Option<&syn::Type> {
             let path = &ty_path.path;
             let ty = path.segments.iter().last().unwrap();
             if let syn::PathArguments::AngleBracketed(bracketed) = &ty.arguments {
-                // Option should only contain a single generic argument, so this is probably
-                // not the usual Option.
                 if bracketed.args.len() == 1 {
                     if let syn::GenericArgument::Type(ty) = bracketed.args.iter().next().unwrap() {
                         return Some(ty);
