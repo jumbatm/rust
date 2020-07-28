@@ -47,7 +47,7 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
     {
         fields
     } else {
-        todo!()
+        todo!("Fields")
     };
 
     let mut builder = SessionDeriveBuilder::new(&diag, fields);
@@ -132,14 +132,18 @@ struct VariantInfo<'a> {
 //
 // Given some struct at a::b::c::Foo, this will return true for c::Foo, b::c::Foo, or
 // a::b::c::Foo. This reasonably allows qualified names to be used in the macro.
-fn type_matches(ty: &syn::TypePath, name: &[&str]) -> bool {
-    ty.path
-        .segments
-        .iter()
-        .map(|s| s.ident.to_string())
-        .rev()
-        .zip(name.iter().rev())
-        .all(|(x, y)| &x.as_str() == y)
+fn type_matches_path(ty: &syn::Type, name: &[&str]) -> bool {
+    if let syn::Type::Path(ty) = ty {
+        ty.path
+            .segments
+            .iter()
+            .map(|s| s.ident.to_string())
+            .rev()
+            .zip(name.iter().rev())
+            .all(|(x, y)| &x.as_str() == y)
+    } else {
+        false
+    }
 }
 
 struct SessionDeriveBuilder<'a> {
@@ -242,7 +246,7 @@ impl<'a> SessionDeriveBuilder<'a> {
                         // As with `code`, this attribute is only allowed once.
                         quote! {}
                     }
-                    _ => unimplemented!(),
+                    other => unimplemented!("Didn't recognise name: {}", other),
                 }
             }
             _ => todo!("unhandled meta kind"),
@@ -278,13 +282,12 @@ impl<'a> SessionDeriveBuilder<'a> {
         // At this point, we need to dispatch based on the attribute key + the
         // type.
         let meta = attr.parse_meta()?;
-        let field_ty_path = if let syn::Type::Path(path) = info.ty { path } else { todo!() };
         Ok(match meta {
             syn::Meta::NameValue(syn::MetaNameValue { lit: syn::Lit::Str(s), .. }) => {
                 let formatted_str = self.build_format(&s.value(), attr.span());
                 match name {
                     "error" => {
-                        if type_matches(field_ty_path, &["rustc_span", "Span"]) {
+                        if type_matches_path(&info.ty, &["rustc_span", "Span"]) {
                             quote! {
                                 #diag.set_span(*#field_binding);
                                 #diag.set_primary_message(#formatted_str);
@@ -296,7 +299,7 @@ impl<'a> SessionDeriveBuilder<'a> {
                         }
                     }
                     "label" => {
-                        if type_matches(field_ty_path, &["rustc_span", "Span"]) {
+                        if type_matches_path(&info.ty, &["rustc_span", "Span"]) {
                             quote! {
                                 #diag.span_label(*#field_binding, #formatted_str);
                             }
@@ -308,7 +311,97 @@ impl<'a> SessionDeriveBuilder<'a> {
                     other => todo!("Unrecognised field: {}", other),
                 }
             }
-            _ => todo!("unhandled meta kind"),
+            syn::Meta::List(list) => {
+                match list.path.segments.iter().last().unwrap().ident.to_string().as_str() {
+                    suggestion_kind @ "suggestion"
+                    | suggestion_kind @ "suggestion_short"
+                    | suggestion_kind @ "suggestion_hidden"
+                    | suggestion_kind @ "suggestion_verbose" => {
+                        // For suggest, we need to ensure we are running on a (Span,
+                        // Applicability) pair.
+                        let (span, applicability) = (|| {
+                            if let syn::Type::Tuple(tup) = &info.ty {
+                                let mut span_idx = None;
+                                let mut applicability_idx = None;
+                                for (idx, elem) in tup.elems.iter().enumerate() {
+                                    if type_matches_path(elem, &["rustc_span", "Span"]) {
+                                        if span_idx.is_none() {
+                                            span_idx = Some(syn::Index::from(idx));
+                                        } else {
+                                            todo!("Error: field contains more than one span");
+                                        }
+                                    } else if type_matches_path(
+                                        elem,
+                                        &["rustc_errors", "Applicability"],
+                                    ) {
+                                        if applicability_idx.is_none() {
+                                            applicability_idx = Some(syn::Index::from(idx));
+                                        } else {
+                                            todo!(
+                                                "Error: field contains more than one Applicability"
+                                            );
+                                        }
+                                    }
+                                }
+                                if let (Some(span_idx), Some(applicability_idx)) =
+                                    (span_idx, applicability_idx)
+                                {
+                                    let binding = &info.binding.binding;
+                                    let span = quote!(#binding.#span_idx);
+                                    let applicability = quote!(#binding.#applicability_idx);
+                                    (span, applicability)
+                                } else {
+                                    todo!("Error: Wrong types for suggestion")
+                                }
+                            } else {
+                                // FIXME: This "wrong types for suggestion" message  (and the one
+                                // above) should be replaced with some kind of Err return
+                                unimplemented!("Error: Wrong types for suggestion")
+                            }
+                        };
+                        // Now read the key-value pairs.
+                        let mut msg = None;
+                        let mut code = None;
+
+                        for arg in list.nested.iter() {
+                            if let syn::NestedMeta::Meta(syn::Meta::NameValue(arg_name_value)) = arg
+                            {
+                                if let syn::MetaNameValue { lit: syn::Lit::Str(s), .. } =
+                                    arg_name_value
+                                {
+                                    let name = arg_name_value.path.segments.last().unwrap().ident.to_string();
+                                    let name = name.as_str();
+                                    let formatted_str = self.build_format(&s.value(), arg.span());
+                                    match name {
+                                        "message" => {
+                                            msg = Some(formatted_str);
+                                        }
+                                        "code" => {
+                                            code = Some(formatted_str);
+                                        }
+                                        _ => unimplemented!(
+                                            "Expected `message` or `code`, got {}",
+                                            name
+                                        ),
+                                    }
+                                }
+                            }
+                        }
+                        let msg = msg
+                            .map_or_else(|| unimplemented!("Error: missing suggestion message"), |m| quote!(#m.as_str()));
+
+                        let code = code.unwrap_or_else(|| quote! { String::new() });
+                        // Now build it out:
+                        let binding = &info.binding.binding;
+                        let suggestion_method = format_ident!("span_{}", suggestion_kind);
+                        quote! {
+                            #diag.#suggestion_method(#span, #msg, #code, #applicability);
+                        }
+                    }
+                    other => unimplemented!("Didn't recognise {} as a valid list name", other),
+                }
+            }
+            _ => panic!("unhandled meta kind"),
         })
     }
 

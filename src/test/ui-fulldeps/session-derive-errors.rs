@@ -14,9 +14,9 @@ use rustc_macros::AsSessionError;
 extern crate rustc_middle;
 use rustc_middle::ty::Ty;
 
-// The macro doesn't pull these crates in itself, because most internal use within the compiler is
-// from contexts where referencing the crates is enough anyway.
 extern crate rustc_errors;
+use rustc_errors::Applicability;
+
 extern crate rustc_session;
 
 #[derive(AsSessionError)]
