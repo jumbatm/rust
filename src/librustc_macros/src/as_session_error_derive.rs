@@ -11,22 +11,29 @@ use std::collections::{HashMap, HashSet};
 /// Implements #[derive(AsSessionError)], which allows for errors to be specified as a struct, independent
 /// from the actual diagnostics emitting code.
 /// ```
+/// # extern crate rustc_errors;
+/// # use rustc_errors::Applicability;
+/// # extern crate rustc_span;
+/// # use rustc_span::{symbol::Ident, Span};
+/// # extern crate rust_middle;
+/// # use rustc_middle::ty::Ty;
 /// #[derive(AsSessionError)]
-/// #[code = E0505]
+/// #[code = "E0505"]
 /// #[error = "cannot move out of {name} because it is borrowed"]
-/// pub struct MoveOutOfBorrowError {
-///     pub name: Symbol,
-///     pub ty: Ty,
+/// pub struct MoveOutOfBorrowError<'tcx> {
+///     pub name: Ident,
+///     pub ty: Ty<'tcx>,
 ///     #[label = "cannot move out of borrow"]
-///     pub span: Span
+///     pub span: Span,
 ///     #[label = "`{ty}` first borrowed here"]
-///     pub other_span: Span
-///     #[suggest(msg = "consider cloning here", code = "{name}.clone()")]
+///     pub other_span: Span,
+///     #[suggestion(message = "consider cloning here", code = "{name}.clone()")]
 ///     pub opt_sugg: Option<(Span, Applicability)>
 /// }
 /// ```
 /// Then, later, to emit the error:
-/// ```
+///
+/// ```ignore (todo-make-this-not-ignore)
 /// sess.emit_err(MoveOutOfBorrowError {
 ///     expected,
 ///     actual,
@@ -35,6 +42,7 @@ use std::collections::{HashMap, HashSet};
 ///     opt_sugg: Some(suggestion, Applicability::MachineApplicable),
 /// });
 /// ```
+// FIXME: Make the marked example above not ignore anymore once that API is implemented.
 pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::TokenStream {
     // Names for the diagnostic we build and the session we build it from.
     let diag = format_ident!("diag");
@@ -468,7 +476,7 @@ impl<'a> SessionDeriveBuilderState<'a> {
 
     /// In the strings in the attributes supplied to this macro, we want callers to be able to
     /// reference fields in the format string. Take this, for example:
-    /// ```
+    /// ```ignore (not-usage-example)
     /// struct Point {
     ///     #[error = "Expected a point greater than ({x}, {y})"]
     ///     x: i32,
@@ -477,7 +485,7 @@ impl<'a> SessionDeriveBuilderState<'a> {
     /// ```
     /// We want to automatically pick up that {x} refers `self.x` and {y} refers to `self.y`, then
     /// generate this call to format!:
-    /// ```
+    /// ```ignore (not-usage-example)
     /// format!("Expected a point greater than ({x}, {y})", x = self.x, y = self.y)
     /// ```
     /// This function builds the entire call to format!.
