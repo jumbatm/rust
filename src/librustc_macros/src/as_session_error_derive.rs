@@ -279,6 +279,30 @@ impl<'a> SessionDeriveBuilder<'a> {
         let field_binding = &info.binding.binding;
         let name = attr.path.segments.last().unwrap().ident.to_string();
         let name = name.as_str();
+
+        let option_ty = option_inner_ty(&info.ty);
+
+        let generated_code = self.generate_non_option_field_code(attr, FieldInfo { vis: info.vis, binding: info.binding, ty: option_ty.unwrap_or(&info.ty) })?;
+        Ok(if option_ty.is_none() {
+            quote! { #generated_code }
+        } else {
+            quote! {
+                if let Some(#field_binding) = #field_binding {
+                    #generated_code
+                }
+            }
+        })
+    }
+
+    fn generate_non_option_field_code(
+        &mut self,
+        attr: &syn::Attribute,
+        info: FieldInfo<'_>,
+    ) -> Result<proc_macro2::TokenStream, SessionDeriveBuilderError> {
+        let diag = self.diag;
+        let field_binding = &info.binding.binding;
+        let name = attr.path.segments.last().unwrap().ident.to_string();
+        let name = name.as_str();
         // At this point, we need to dispatch based on the attribute key + the
         // type.
         let meta = attr.parse_meta()?;
@@ -494,4 +518,24 @@ impl<'a> SessionDeriveBuilder<'a> {
             format!(#input #(,#args)*)
         }
     }
+}
+
+/// /// If `ty` is an Option, returns Some(inner type). Else, returns None.
+fn option_inner_ty(ty: &syn::Type) -> Option<&syn::Type> {
+    if type_matches_path(ty, &["std", "option", "Option"]) {
+        if let syn::Type::Path(ty_path) = ty {
+            let path = &ty_path.path;
+            let ty = path.segments.iter().last().unwrap();
+            if let syn::PathArguments::AngleBracketed(bracketed) = &ty.arguments {
+                // Option should only contain a single generic argument, so this is probably
+                // not the usual Option.
+                if bracketed.args.len() == 1 {
+                    if let syn::GenericArgument::Type(ty) = bracketed.args.iter().next().unwrap() {
+                        return Some(ty);
+                    }
+                }
+            }
+        }
+    }
+    None
 }

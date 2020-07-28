@@ -73,6 +73,16 @@ struct LabelOnNonSpan {
 }
 
 #[derive(AsSessionError)]
+#[code = "E0123"]
+#[error = "Something something else"]
+struct OptionsInErrors {
+    #[label = "Label message"]
+    label: Option<Span>,
+    #[suggestion(message = "suggestion message")]
+    opt_sugg: Option<(Span, Applicability)>,
+}
+
+#[derive(AsSessionError)]
 #[code = "E0456"]
 struct MoveOutOfBorrowError<'tcx> {
     name: Ident,
@@ -83,5 +93,5 @@ struct MoveOutOfBorrowError<'tcx> {
     #[label = "`{ty}` first borrowed here"]
     other_span: Span,
     #[suggestion(message = "consider cloning here", code = "{name}.clone()")]
-    suggestion: (Span, Applicability),
+    opt_sugg: Option<(Span, Applicability)>,
 }
