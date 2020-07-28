@@ -40,79 +40,8 @@ pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::T
     let diag = format_ident!("diag");
     let sess = format_ident!("sess");
 
-    // Convenience bindings.
-    let ast = s.ast();
-    let attrs = &ast.attrs;
-    let fields: &syn::Fields = if let syn::Data::Struct(syn::DataStruct { fields, .. }) = &ast.data
-    {
-        fields
-    } else {
-        todo!("Fields")
-    };
-
-    let mut builder = SessionDeriveBuilder::new(&diag, fields);
-
-    // FIXME: Is there a way to avoid needing a collect() here?
-    let preamble: Vec<_> = attrs
-        .iter()
-        .map(|attr| {
-            builder
-                .generate_structure_code(attr, VariantInfo { ident: &ast.ident })
-                .unwrap_or_else(|v| v.to_tokens())
-        })
-        .collect();
-
-    // FIXME: Could move all the logic into a single function. fn(Key, type) -> TokenStream. Then,
-    // on this side, would just need to walk all the attributes on this struct. Using each here is
-    // beneficial because it lets enums be used to dispatch slightly-differing messages.
-    let body = s.each(|field_binding| {
-        let field = field_binding.ast();
-        let result = field.attrs.iter().map(|attr| {
-            builder
-                .generate_field_code(
-                    attr,
-                    FieldInfo { vis: &field.vis, binding: field_binding, ty: &field.ty },
-                )
-                .unwrap_or_else(|v| v.to_tokens())
-        });
-        return quote! {
-            #(#result);*
-        };
-    });
-    // Finally, put it all together.
-    let implementation = match builder.kind {
-        None => Err(SessionDeriveBuilderError {
-            kind: SessionDeriveBuilderErrorKind::IdNotProvided,
-            span: s.ast().span(),
-        }),
-        Some(kind) => Ok(match kind {
-            DiagnosticId::Lint(_lint) => todo!(),
-            DiagnosticId::Error(code) => {
-                quote! {
-                    let mut #diag = #sess.struct_err_with_code("", rustc_errors::DiagnosticId::Error(#code));
-                    #(#preamble)*;
-                    match self {
-                        #body
-                    }
-                    #diag
-                }
-            }
-        }),
-    };
-
-    let implementation = match implementation {
-        Ok(x) => x,
-        Err(e) => e.to_tokens(),
-    };
-
-    s.gen_impl(quote! {
-        gen impl<'a> rustc_errors::AsError<'a> for @Self {
-            type Session = rustc_session::Session;
-            fn as_error(self, #sess: &'a Self::Session) -> rustc_errors::DiagnosticBuilder {
-                #implementation
-            }
-        }
-    })
+    let mut builder = SessionDeriveBuilder::new(diag, sess, s);
+    builder.build()
 }
 
 // FIXME: Remove unused fields.
@@ -146,16 +75,10 @@ fn type_matches_path(ty: &syn::Type, name: &[&str]) -> bool {
     }
 }
 
+/// The central struct for constructing the as_error method from an annotated struct.
 struct SessionDeriveBuilder<'a> {
-    /// Store a map of field name to its corresponding field. This is built on construction of the
-    /// derive builder.
-    fields: HashMap<String, &'a syn::Field>,
-
-    /// The identifier to use for the generated DiagnosticBuilder instance.
-    diag: &'a syn::Ident,
-
-    /// Whether this is a lint or an error. This dictates how the diag will be initialised.
-    kind: Option<DiagnosticId>,
+    structure: synstructure::Structure<'a>,
+    state: SessionDeriveBuilderState<'a>,
 }
 
 #[allow(unused)]
@@ -203,27 +126,130 @@ impl std::convert::From<syn::Error> for SessionDeriveBuilderError {
     }
 }
 
-#[deny(unused_must_use)]
 impl<'a> SessionDeriveBuilder<'a> {
-    fn new(diag: &'a syn::Ident, fields: &'a syn::Fields) -> Self {
+    fn new(diag: syn::Ident, sess: syn::Ident, structure: synstructure::Structure<'a>) -> Self {
         // Build the mapping of field names to fields. This allows attributes to peek values from
         // other fields.
         let mut fields_map = HashMap::new();
+
+        // Convenience bindings.
+        let ast = structure.ast();
+        let attrs = &ast.attrs;
+
+        let fields: &syn::Fields =
+            if let syn::Data::Struct(syn::DataStruct { fields, .. }) = &ast.data {
+                fields
+            } else {
+                todo!("#[derive(AsSessionError)] can't yet be used on enums")
+            };
         for field in fields.iter() {
             if let Some(ident) = &field.ident {
                 fields_map.insert(ident.to_string(), field);
             }
         }
 
-        Self { diag, fields: fields_map, kind: None }
+        Self {
+            state: SessionDeriveBuilderState { diag, sess, fields: fields_map, kind: None },
+            structure,
+        }
     }
+    fn build(mut self) -> proc_macro2::TokenStream {
+        let SessionDeriveBuilder { structure, mut state } = self;
 
+        let ast = structure.ast();
+        let attrs = &ast.attrs;
+
+        // FIXME: Is there a way to avoid needing a collect() here?
+        let preamble: Vec<_> = attrs
+            .iter()
+            .map(|attr| {
+                state
+                    .generate_structure_code(attr, VariantInfo { ident: &ast.ident })
+                    .unwrap_or_else(|v| v.to_tokens())
+            })
+            .collect();
+
+        let body = structure.each(|field_binding| {
+            let field = field_binding.ast();
+            let result = field.attrs.iter().map(|attr| {
+                state
+                    .generate_field_code(
+                        attr,
+                        FieldInfo { vis: &field.vis, binding: field_binding, ty: &field.ty },
+                    )
+                    .unwrap_or_else(|v| v.to_tokens())
+            });
+            return quote! {
+                #(#result);*
+            };
+        });
+
+        // Finally, put it all together.
+        let sess = &state.sess;
+        let diag = &state.diag;
+        let implementation = match state.kind {
+            None => Err(SessionDeriveBuilderError {
+                kind: SessionDeriveBuilderErrorKind::IdNotProvided,
+                span: structure.ast().span(),
+            }),
+            Some(kind) => Ok(match kind {
+                DiagnosticId::Lint(_lint) => todo!(),
+                DiagnosticId::Error(code) => {
+                    quote! {
+                        let mut #diag = #sess.struct_err_with_code("", rustc_errors::DiagnosticId::Error(#code));
+                        #(#preamble)*;
+                        match self {
+                            #body
+                        }
+                        #diag
+                    }
+                }
+            }),
+        };
+
+        let implementation = match implementation {
+            Ok(x) => x,
+            Err(e) => e.to_tokens(),
+        };
+
+        structure.gen_impl(quote! {
+            gen impl<'a> rustc_errors::AsError<'a> for @Self {
+                type Session = rustc_session::Session;
+                fn as_error(self, #sess: &'a Self::Session) -> rustc_errors::DiagnosticBuilder {
+                    #implementation
+                }
+            }
+        })
+    }
+}
+
+/// Contains all persistent information required for building up the individual calls in the
+/// as_error method. This is a separate struct to later be able to split self.state and the
+/// self.structure up to avoid a double mut borrow of self when calling the generate_* inside the
+/// closure passed to self.structure.each.
+struct SessionDeriveBuilderState<'a> {
+    /// Name of the session parameter that's passed in to the as_error method.
+    sess: syn::Ident,
+
+    /// Store a map of field name to its corresponding field. This is built on construction of the
+    /// derive builder.
+    fields: HashMap<String, &'a syn::Field>,
+
+    /// The identifier to use for the generated DiagnosticBuilder instance.
+    diag: syn::Ident,
+
+    /// Whether this is a lint or an error. This dictates how the diag will be initialised.
+    kind: Option<DiagnosticId>,
+}
+
+#[deny(unused_must_use)]
+impl<'a> SessionDeriveBuilderState<'a> {
     fn generate_structure_code(
         &mut self,
         attr: &syn::Attribute,
         _info: VariantInfo<'a>, // FIXME: Remove this parameter?
     ) -> Result<proc_macro2::TokenStream, SessionDeriveBuilderError> {
-        let diag = self.diag;
+        let diag = &self.diag;
         Ok(match attr.parse_meta()? {
             syn::Meta::NameValue(syn::MetaNameValue { lit: syn::Lit::Str(s), .. }) => {
                 let formatted_str = self.build_format(&s.value(), attr.span());
@@ -275,7 +301,7 @@ impl<'a> SessionDeriveBuilder<'a> {
         attr: &syn::Attribute,
         info: FieldInfo<'_>,
     ) -> Result<proc_macro2::TokenStream, SessionDeriveBuilderError> {
-        let diag = self.diag;
+        let diag = &self.diag;
         let field_binding = &info.binding.binding;
         let name = attr.path.segments.last().unwrap().ident.to_string();
         let name = name.as_str();
@@ -302,7 +328,7 @@ impl<'a> SessionDeriveBuilder<'a> {
         attr: &syn::Attribute,
         info: FieldInfo<'_>,
     ) -> Result<proc_macro2::TokenStream, SessionDeriveBuilderError> {
-        let diag = self.diag;
+        let diag = &self.diag;
         let field_binding = &info.binding.binding;
         let name = attr.path.segments.last().unwrap().ident.to_string();
         let name = name.as_str();
