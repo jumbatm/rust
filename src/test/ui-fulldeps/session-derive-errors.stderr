@@ -1,20 +1,86 @@
-error: Diagnostic ID multiply provided
+error: `code` specified multiple times
   --> $DIR/session-derive-errors.rs:30:1
    |
 LL | #[code = "E0456"]
    | ^^^^^^^^^^^^^^^^^
+   |
+note: error code already provided here
+  --> $DIR/session-derive-errors.rs:29:1
+   |
+LL | #[code = "E0123"]
+   | ^^^^^^^^^^^^^^^^^
 
-error: no field `name` on this type
-  --> $DIR/session-derive-errors.rs:53:5
+error: `code` not specified
+  --> $DIR/session-derive-errors.rs:34:1
+   |
+LL | struct ErrorCodeNotProvided {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: use the [code = "..."] attribute to set this diagnostic's error code 
+
+error: `name` doesn't refer to a field on this type
+  --> $DIR/session-derive-errors.rs:56:5
    |
 LL |     #[error = "This error has a field, and references {name}"]
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: The `#[label = ...]` attribute can only be applied to fields of type Span
-  --> $DIR/session-derive-errors.rs:70:5
+  --> $DIR/session-derive-errors.rs:73:5
    |
 LL |     #[label = "See here"]
    |     ^^^^^^^^^^^^^^^^^^^^^
 
-error: aborting due to 3 previous errors
+error: `nonsense` is not a valid key for `#[suggestion(...)]`
+  --> $DIR/session-derive-errors.rs:95:18
+   |
+LL |     #[suggestion(nonsense = "This is nonsense")]
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: `msg` is not a valid key for `#[suggestion(...)]`
+  --> $DIR/session-derive-errors.rs:103:18
+   |
+LL |     #[suggestion(msg = "This is a suggestion")]
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: missing suggestion message
+  --> $DIR/session-derive-errors.rs:111:7
+   |
+LL |     #[suggestion(code = "This is suggested code")]
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: provide a suggestion message using #[suggestion(message = "...")]
+
+error: wrong types for suggestion
+  --> $DIR/session-derive-errors.rs:123:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: wrong types for suggestion
+  --> $DIR/session-derive-errors.rs:131:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: field annotated with `#[suggestion(..)]` contains more than one span
+  --> $DIR/session-derive-errors.rs:139:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: field annotated with `#[suggestion(...)]` contains more than one Applicability
+  --> $DIR/session-derive-errors.rs:147:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: aborting due to 11 previous errors
 

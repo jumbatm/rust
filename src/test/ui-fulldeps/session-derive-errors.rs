@@ -1,5 +1,5 @@
 // check-fail
-// Tests error conditions for specifying diagnostics using #[derive(AsSessionError)]
+// Tests error conditions for specifying diagnostics using #[derive(SessionDiagnostic)]
 
 #![feature(rustc_private)]
 #![crate_type = "lib"]
@@ -9,7 +9,7 @@ use rustc_span::Span;
 use rustc_span::symbol::Ident;
 
 extern crate rustc_macros;
-use rustc_macros::AsSessionError;
+use rustc_macros::SessionDiagnostic;
 
 extern crate rustc_middle;
 use rustc_middle::ty::Ty;
@@ -19,27 +19,30 @@ use rustc_errors::Applicability;
 
 extern crate rustc_session;
 
-#[derive(AsSessionError)]
+#[derive(SessionDiagnostic)]
 #[error = "Hello, world!"]
 #[code = "E0123"]
 struct Hello {}
 
-#[derive(AsSessionError)]
+#[derive(SessionDiagnostic)]
 #[error = "Hello, world!"]
 #[code = "E0123"]
-#[code = "E0456"] //~ ERROR Diagnostic ID multiply provided
+#[code = "E0456"] //~ ERROR `code` specified multiple times
 struct ErrorSpecifiedTwice {}
+
+#[derive(SessionDiagnostic)]
+struct ErrorCodeNotProvided {} //~ ERROR `code` not specified
 
 // FIXME: Uncomment when emitting lints is supported.
 /*
-#[derive(AsSessionError)]
+#[derive(SessionDiagnostic)]
 #[error = "Hello, world!"]
 #[lint = "clashing_extern_declarations"]
-#[lint = "improper_ctypes"] // FIXME: ERROR Diagnostic ID multiply provided
+#[lint = "improper_ctypes"] // FIXME: ERROR error code specified multiple times
 struct LintSpecifiedTwice {}
 */
 
-#[derive(AsSessionError)]
+#[derive(SessionDiagnostic)]
 #[code = "E0123"]
 struct ErrorWithField {
     name: String,
@@ -47,15 +50,15 @@ struct ErrorWithField {
     span: Span
 }
 
-#[derive(AsSessionError)]
+#[derive(SessionDiagnostic)]
 #[code = "E0123"]
 struct ErrorWithNonexistentField {
     #[error = "This error has a field, and references {name}"]
-    //~^ ERROR no field `name` on this type
+    //~^ ERROR `name` doesn't refer to a field on this type
     span: Span
 }
 
-#[derive(AsSessionError)]
+#[derive(SessionDiagnostic)]
 #[code = "E0123"]
 #[error = "Something something"]
 struct LabelOnSpan {
@@ -63,7 +66,7 @@ struct LabelOnSpan {
     sp: Span
 }
 
-#[derive(AsSessionError)]
+#[derive(SessionDiagnostic)]
 #[code = "E0123"]
 #[error = "Something something"]
 struct LabelOnNonSpan {
@@ -72,7 +75,84 @@ struct LabelOnNonSpan {
     id: u32,
 }
 
-#[derive(AsSessionError)]
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct Suggest {
+    #[suggestion(message = "This is a suggestion", code = "This is the suggested code")]
+    suggestion: (Span, Applicability),
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct SuggestWithoutCode {
+    #[suggestion(message = "This is a suggestion")]
+    suggestion: (Span, Applicability),
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct SuggestWithBadKey {
+    #[suggestion(nonsense = "This is nonsense")]
+    //~^ ERROR `nonsense` is not a valid key for `#[suggestion(...)]`
+    suggestion: (Span, Applicability),
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct SuggestWithShorthandMsg {
+    #[suggestion(msg = "This is a suggestion")]
+    //~^ ERROR `msg` is not a valid key for `#[suggestion(...)]`
+    suggestion: (Span, Applicability),
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct SuggestWithoutMsg {
+    #[suggestion(code = "This is suggested code")]
+    //~^ ERROR missing suggestion message
+    suggestion: (Span, Applicability),
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct SuggestWithTypesSwapped{
+    #[suggestion(message = "This is a message", code = "This is suggested code")]
+    suggestion: (Applicability, Span),
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct SuggestWithWrongTypeApplicabilityOnly{
+    #[suggestion(message = "This is a message", code = "This is suggested code")]
+    suggestion: Applicability,
+    //~^ ERROR The `#[suggestion(...)]` attribute can only be applied to fields of type `(Span, Applicability)`
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct SuggestWithWrongTypeSpanOnly{
+    #[suggestion(message = "This is a message", code = "This is suggested code")]
+    suggestion: Span,
+    //~^ ERROR The `#[suggestion(...)]` attribute can only be applied to fields of type `(Span, Applicability)`
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct SuggestWithDuplicateSpanAndApplicability {
+    #[suggestion(message = "This is a message", code = "This is suggested code")]
+    suggestion: (Span, Span, Applicability),
+    //~^ ERROR field annotated with `#[suggestion(...)]` contains more than one span
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct SuggestWithDuplicateApplicabilityAndSpan {
+    #[suggestion(message = "This is a message", code = "This is suggested code")]
+    suggestion: (Applicability, Applicability, Span),
+    //~^ ERROR field annotated with `#[suggestion(...)]` contains more than one Applicability
+}
+
+#[derive(SessionDiagnostic)]
 #[code = "E0123"]
 #[error = "Something something else"]
 struct OptionsInErrors {
@@ -82,7 +162,7 @@ struct OptionsInErrors {
     opt_sugg: Option<(Span, Applicability)>,
 }
 
-#[derive(AsSessionError)]
+#[derive(SessionDiagnostic)]
 #[code = "E0456"]
 struct MoveOutOfBorrowError<'tcx> {
     name: Ident,
