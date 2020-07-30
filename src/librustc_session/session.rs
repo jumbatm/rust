@@ -236,9 +236,12 @@ enum DiagnosticBuilderMethod {
                             // Add more variants as needed to support one-time diagnostics.
 }
 
-/// Trait alias for AsError that emits errors into the session. Goes hand-in-hand with
-/// the AsSessionError derive macro.
-pub trait AsSessionError<'a> = rustc_errors::AsError<'a, Session = Session>;
+/// Trait implemented by error types. See [rustc_builtin_macros::as_error_derive].
+pub trait SessionDiagnostic<'a> {
+    /// Write out as a diagnostic out of `sess`.
+    #[must_use]
+    fn into_diagnostic(self, sess: &'a Session) -> DiagnosticBuilder<'a>;
+}
 
 /// Diagnostic message ID, used by `Session.one_time_diagnostics` to avoid
 /// emitting the same message more than once.
@@ -394,6 +397,9 @@ impl Session {
     }
     pub fn err(&self, msg: &str) {
         self.diagnostic().err(msg)
+    }
+    pub fn emit_err<'a>(&'a self, err: impl SessionDiagnostic<'a>) {
+        err.into_diagnostic(self).emit()
     }
     pub fn err_count(&self) -> usize {
         self.diagnostic().err_count()

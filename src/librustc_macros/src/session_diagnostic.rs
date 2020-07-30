@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 /// # use rustc_span::{symbol::Ident, Span};
 /// # extern crate rust_middle;
 /// # use rustc_middle::ty::Ty;
-/// #[derive(AsSessionError)]
+/// #[derive(SessionDiagnostic)]
 /// #[code = "E0505"]
 /// #[error = "cannot move out of {name} because it is borrowed"]
 /// pub struct MoveOutOfBorrowError<'tcx> {
@@ -43,7 +43,7 @@ use std::collections::{HashMap, HashSet};
 /// });
 /// ```
 // FIXME: Make the marked example above not ignore anymore once that API is implemented.
-pub fn as_session_error_derive(s: synstructure::Structure<'_>) -> proc_macro2::TokenStream {
+pub fn session_diagnostic_derive(s: synstructure::Structure<'_>) -> proc_macro2::TokenStream {
     // Names for the diagnostic we build and the session we build it from.
     let diag = format_ident!("diag");
     let sess = format_ident!("sess");
@@ -220,9 +220,8 @@ impl<'a> SessionDeriveBuilder<'a> {
         };
 
         structure.gen_impl(quote! {
-            gen impl<'a> rustc_errors::AsError<'a> for @Self {
-                type Session = rustc_session::Session;
-                fn as_error(self, #sess: &'a Self::Session) -> rustc_errors::DiagnosticBuilder {
+            gen impl<'a> rustc_session::SessionDiagnostic<'a> for @Self {
+                fn into_diagnostic(self, #sess: &'a rustc_session::Session) -> rustc_errors::DiagnosticBuilder<'a> {
                     #implementation
                 }
             }

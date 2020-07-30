@@ -6,7 +6,7 @@ use synstructure::decl_derive;
 
 use proc_macro::TokenStream;
 
-mod as_session_error_derive;
+mod session_diagnostic;
 mod hash_stable;
 mod lift;
 mod query;
@@ -38,4 +38,4 @@ decl_derive!([MetadataDecodable] => serialize::meta_decodable_derive);
 decl_derive!([MetadataEncodable] => serialize::meta_encodable_derive);
 decl_derive!([TypeFoldable, attributes(type_foldable)] => type_foldable::type_foldable_derive);
 decl_derive!([Lift, attributes(lift)] => lift::lift_derive);
-decl_derive!([AsSessionError, attributes(code, error, label, suggestion)] => as_session_error_derive::as_session_error_derive);
+decl_derive!([SessionDiagnostic, attributes(code, error, label, suggestion)] => session_diagnostic::session_diagnostic_derive);

@@ -49,7 +49,8 @@ use rustc_span::{Span, DUMMY_SP};
 use rustc_target::spec::abi;
 use rustc_trait_selection::traits::error_reporting::suggestions::NextTypeParamName;
 
-use rustc_macros::AsSessionError;
+use rustc_macros::SessionDiagnostic;
+
 
 mod type_of;
 
@@ -835,7 +836,7 @@ fn convert_variant(
             let fid = tcx.hir().local_def_id(f.hir_id);
             let dup_span = seen_fields.get(&f.ident.normalize_to_macros_2_0()).cloned();
             if let Some(prev_span) = dup_span {
-                #[derive(AsSessionError)]
+                #[derive(SessionDiagnostic)]
                 #[code = "E0124"]
                 struct FieldAlreadyDeclared {
                     field_name: String,
@@ -846,10 +847,7 @@ fn convert_variant(
                     prev_span: Span,
                 }
 
-                use rustc_errors::AsError;
-                FieldAlreadyDeclared { field_name: f.ident.to_string(), span: f.span, prev_span }
-                    .as_error(tcx.sess)
-                    .emit();
+                tcx.sess.emit_err(FieldAlreadyDeclared { field_name: f.ident.to_string(), span: f.span, prev_span });
             } else {
                 seen_fields.insert(f.ident.normalize_to_macros_2_0(), f.span);
             }
