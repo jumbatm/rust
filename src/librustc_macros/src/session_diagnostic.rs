@@ -1,5 +1,4 @@
-#![allow(unreachable_code)]
-#![allow(unused)]
+#![deny(unused_must_use)]
 use quote::format_ident;
 use quote::quote;
 
@@ -121,7 +120,7 @@ fn _throw_span_err(
     msg: &str,
     f: impl FnOnce(proc_macro::Diagnostic) -> proc_macro::Diagnostic,
 ) -> SessionDiagnosticDeriveError {
-    let mut diag = Diagnostic::spanned(span, proc_macro::Level::Error, msg);
+    let diag = Diagnostic::spanned(span, proc_macro::Level::Error, msg);
     f(diag).emit();
     SessionDiagnosticDeriveError::ErrorHandled
 }
@@ -134,7 +133,6 @@ impl<'a> SessionDiagnosticDerive<'a> {
 
         // Convenience bindings.
         let ast = structure.ast();
-        let attrs = &ast.attrs;
 
         if let syn::Data::Struct(syn::DataStruct { fields, .. }) = &ast.data {
             for field in fields.iter() {
@@ -149,7 +147,7 @@ impl<'a> SessionDiagnosticDerive<'a> {
             structure,
         }
     }
-    fn into_tokens(mut self) -> proc_macro2::TokenStream {
+    fn into_tokens(self) -> proc_macro2::TokenStream {
         let SessionDiagnosticDerive { structure, mut builder } = self;
 
         let ast = structure.ast();
@@ -162,7 +160,7 @@ impl<'a> SessionDiagnosticDerive<'a> {
                     .iter()
                     .map(|attr| {
                         builder
-                            .generate_structure_code(attr, VariantInfo { ident: &ast.ident })
+                            .generate_structure_code(attr)
                             .unwrap_or_else(|v| v.to_compile_error())
                     })
                     .collect();
@@ -223,7 +221,7 @@ impl<'a> SessionDiagnosticDerive<'a> {
             }
         };
 
-        let (diag, sess) = (&builder.diag, &builder.sess);
+        let sess = &builder.sess;
         structure.gen_impl(quote! {
             gen impl<'a> rustc_session::SessionDiagnostic<'a> for @Self {
                 fn into_diagnostic(self, #sess: &'a rustc_session::Session) -> rustc_errors::DiagnosticBuilder<'a> {
@@ -241,12 +239,6 @@ struct FieldInfo<'a> {
     binding: &'a synstructure::BindingInfo<'a>,
     ty: &'a syn::Type,
     span: &'a proc_macro2::Span,
-}
-
-/// Information on the entire structure, passed to the builder. Deliberately omits attrs to
-/// discourage the generate_* methods from walking the attributes themselves.
-struct VariantInfo<'a> {
-    ident: &'a syn::Ident,
 }
 
 /// Tracks persistent information required for building up the individual calls to diagnostic
@@ -270,12 +262,10 @@ struct SessionDiagnosticDeriveBuilder<'a> {
     kind: Option<(DiagnosticId, proc_macro2::Span)>,
 }
 
-#[deny(unused_must_use)]
 impl<'a> SessionDiagnosticDeriveBuilder<'a> {
     fn generate_structure_code(
         &mut self,
         attr: &syn::Attribute,
-        _info: VariantInfo<'a>, // FIXME: Remove this parameter?
     ) -> Result<proc_macro2::TokenStream, SessionDiagnosticDeriveError> {
         let diag = &self.diag;
         Ok(match attr.parse_meta()? {
@@ -326,10 +316,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
         attr: &syn::Attribute,
         info: FieldInfo<'_>,
     ) -> Result<proc_macro2::TokenStream, SessionDiagnosticDeriveError> {
-        let diag = &self.diag;
         let field_binding = &info.binding.binding;
-        let name = attr.path.segments.last().unwrap().ident.to_string();
-        let name = name.as_str();
 
         let option_ty = option_inner_ty(&info.ty);
 
@@ -497,7 +484,6 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                         };
                         let code = code.unwrap_or_else(|| quote! { String::new() });
                         // Now build it out:
-                        let binding = &info.binding.binding;
                         let suggestion_method = format_ident!("span_{}", suggestion_kind);
                         quote! {
                             #diag.#suggestion_method(#span, #msg, #code, #applicability);
