@@ -154,6 +154,14 @@ struct SuggestWithDuplicateApplicabilityAndSpan {
 
 #[derive(SessionDiagnostic)]
 #[code = "E0123"]
+struct WrongKindOfAnnotation {
+    #[label("wrong kind of annotation for label")]
+    //~^ ERROR invalid annotation list `#[label(...)]`
+    z: Span,
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
 #[error = "Something something else"]
 struct OptionsInErrors {
     #[label = "Label message"]

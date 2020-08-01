@@ -80,5 +80,11 @@ LL | |
 LL | |     suggestion: (Applicability, Applicability, Span),
    | |____________________________________________________^
 
-error: aborting due to 11 previous errors
+error: invalid annotation list `#[label(...)]`
+  --> $DIR/session-derive-errors.rs:158:7
+   |
+LL |     #[label("wrong kind of annotation for label")]
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 12 previous errors
 

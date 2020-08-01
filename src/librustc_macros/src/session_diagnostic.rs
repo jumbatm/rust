@@ -487,7 +487,7 @@ impl<'a> SessionDeriveBuilderState<'a> {
                             #diag.#suggestion_method(#span, #msg, #code, #applicability);
                         }
                     }
-                    other => unimplemented!("Didn't recognise {} as a valid list name", other),
+                    other => throw_span_err!(list.span(), &format!("invalid annotation list `#[{}(...)]`", other)),
                 }
             }
             _ => panic!("unhandled meta kind"),
