@@ -234,7 +234,6 @@ impl<'a> SessionDiagnosticDerive<'a> {
     }
 }
 
-
 /// Field information passed to the builder. Deliberately omits attrs to discourage the generate_*
 /// methods from walking the attributes themselves.
 struct FieldInfo<'a> {
@@ -412,7 +411,10 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                         if span_idx.is_none() {
                                             span_idx = Some(syn::Index::from(idx));
                                         } else {
-                                            throw_span_err!(info.span.clone().unwrap(), "type of field annotated with `#[suggestion(...)]` contains more than one Span");
+                                            throw_span_err!(
+                                                info.span.clone().unwrap(),
+                                                "type of field annotated with `#[suggestion(...)]` contains more than one Span"
+                                            );
                                         }
                                     } else if type_matches_path(
                                         elem,
@@ -485,9 +487,13 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                         let msg = if let Some(msg) = msg {
                             quote!(#msg.as_str())
                         } else {
-                            throw_span_err!(list.span().unwrap(), "missing suggestion message", |diag| {
-                                diag.help("provide a suggestion message using #[suggestion(message = \"...\")]")
-                            });
+                            throw_span_err!(
+                                list.span().unwrap(),
+                                "missing suggestion message",
+                                |diag| {
+                                    diag.help("provide a suggestion message using #[suggestion(message = \"...\")]")
+                                }
+                            );
                         };
                         let code = code.unwrap_or_else(|| quote! { String::new() });
                         // Now build it out:
@@ -497,7 +503,10 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                             #diag.#suggestion_method(#span, #msg, #code, #applicability);
                         }
                     }
-                    other => throw_span_err!(list.span().unwrap(), &format!("invalid annotation list `#[{}(...)]`", other)),
+                    other => throw_span_err!(
+                        list.span().unwrap(),
+                        &format!("invalid annotation list `#[{}(...)]`", other)
+                    ),
                 }
             }
             _ => panic!("unhandled meta kind"),

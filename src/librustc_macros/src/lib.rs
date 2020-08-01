@@ -6,11 +6,11 @@ use synstructure::decl_derive;
 
 use proc_macro::TokenStream;
 
-mod session_diagnostic;
 mod hash_stable;
 mod lift;
 mod query;
 mod serialize;
+mod session_diagnostic;
 mod symbols;
 mod type_foldable;
 

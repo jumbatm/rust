@@ -51,7 +51,6 @@ use rustc_trait_selection::traits::error_reporting::suggestions::NextTypeParamNa
 
 use rustc_macros::SessionDiagnostic;
 
-
 mod type_of;
 
 struct OnlySelfBounds(bool);
@@ -847,7 +846,11 @@ fn convert_variant(
                     prev_span: Span,
                 }
 
-                tcx.sess.emit_err(FieldAlreadyDeclared { field_name: f.ident.to_string(), span: f.span, prev_span });
+                tcx.sess.emit_err(FieldAlreadyDeclared {
+                    field_name: f.ident.to_string(),
+                    span: f.span,
+                    prev_span,
+                });
             } else {
                 seen_fields.insert(f.ident.normalize_to_macros_2_0(), f.span);
             }
