@@ -131,11 +131,11 @@ macro_rules! throw_span_err {
     }};
 }
 fn _throw_span_err(
-    span: proc_macro2::Span, // FIXME: Take an impl MultiSpan
+    span: impl proc_macro::MultiSpan,
     msg: &str,
     f: impl FnOnce(proc_macro::Diagnostic) -> proc_macro::Diagnostic,
 ) -> SessionDiagnosticDeriveError {
-    let mut diag = Diagnostic::spanned(span.unwrap(), proc_macro::Level::Error, msg);
+    let mut diag = Diagnostic::spanned(span, proc_macro::Level::Error, msg);
     f(diag).emit();
     SessionDiagnosticDeriveError::ErrorHandled
 }
@@ -209,7 +209,7 @@ impl<'a> SessionDiagnosticDerive<'a> {
         let implementation = match builder.kind {
             None => {
                 (|| {
-                    throw_span_err!(ast.span(), "`code` not specified", |diag| {
+                    throw_span_err!(ast.span().unwrap(), "`code` not specified", |diag| {
                         diag.help("use the [code = \"...\"] attribute to set this diagnostic's error code ")
                     });
                 })().unwrap_or_else(|err| err.to_compile_error())
@@ -307,7 +307,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
             self.kind = Some((kind, span));
             Ok(())
         } else {
-            throw_span_err!(span, "`code` specified multiple times");
+            throw_span_err!(span.unwrap(), "`code` specified multiple times");
         }
     }
 
@@ -401,7 +401,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                         if span_idx.is_none() {
                                             span_idx = Some(syn::Index::from(idx));
                                         } else {
-                                            throw_span_err!(info.span.clone(), "type of field annotated with `#[suggestion(...)]` contains more than one Span");
+                                            throw_span_err!(info.span.clone().unwrap(), "type of field annotated with `#[suggestion(...)]` contains more than one Span");
                                         }
                                     } else if type_matches_path(
                                         elem,
@@ -411,7 +411,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                             applicability_idx = Some(syn::Index::from(idx));
                                         } else {
                                             throw_span_err!(
-                                                info.span.clone(),
+                                                info.span.clone().unwrap(),
                                                 "type of field annotated with `#[suggestion(...)]` contains more than one Applicability"
                                             );
                                         }
@@ -427,7 +427,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                 }
                             }
                             throw_span_err!(
-                                info.span.clone(),
+                                info.span.clone().unwrap(),
                                 "wrong types for suggestion",
                                 |diag| {
                                     diag.help("#[suggestion(...)] should be applied to fields of type (Span, Applicability)")
@@ -461,7 +461,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                             code = Some(formatted_str);
                                         }
                                         other => throw_span_err!(
-                                            arg.span(),
+                                            arg.span().unwrap(),
                                             &format!(
                                                 "`{}` is not a valid key for `#[suggestion(...)]`",
                                                 other
@@ -474,7 +474,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                         let msg = if let Some(msg) = msg {
                             quote!(#msg.as_str())
                         } else {
-                            throw_span_err!(list.span(), "missing suggestion message", |diag| {
+                            throw_span_err!(list.span().unwrap(), "missing suggestion message", |diag| {
                                 diag.help("provide a suggestion message using #[suggestion(message = \"...\")]")
                             });
                         };
@@ -486,7 +486,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                             #diag.#suggestion_method(#span, #msg, #code, #applicability);
                         }
                     }
-                    other => throw_span_err!(list.span(), &format!("invalid annotation list `#[{}(...)]`", other)),
+                    other => throw_span_err!(list.span().unwrap(), &format!("invalid annotation list `#[{}(...)]`", other)),
                 }
             }
             _ => panic!("unhandled meta kind"),
