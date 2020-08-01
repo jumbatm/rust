@@ -25,6 +25,14 @@ extern crate rustc_session;
 struct Hello {}
 
 #[derive(SessionDiagnostic)]
+#[code = "E0123"]
+//~^ ERROR `#[derive(SessionDiagnostic)]` can only be used on structs
+enum SessionDiagnosticOnEnum {
+    Foo,
+    Bar,
+}
+
+#[derive(SessionDiagnostic)]
 #[error = "Hello, world!"]
 #[code = "E0123"]
 #[code = "E0456"] //~ ERROR `code` specified multiple times

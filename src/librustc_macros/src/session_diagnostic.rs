@@ -136,15 +136,11 @@ impl<'a> SessionDiagnosticDerive<'a> {
         let ast = structure.ast();
         let attrs = &ast.attrs;
 
-        let fields: &syn::Fields =
-            if let syn::Data::Struct(syn::DataStruct { fields, .. }) = &ast.data {
-                fields
-            } else {
-                todo!("#[derive(AsSessionError)] can't yet be used on enums")
-            };
-        for field in fields.iter() {
-            if let Some(ident) = &field.ident {
-                fields_map.insert(ident.to_string(), field);
+        if let syn::Data::Struct(syn::DataStruct { fields, .. }) = &ast.data {
+            for field in fields.iter() {
+                if let Some(ident) = &field.ident {
+                    fields_map.insert(ident.to_string(), field);
+                }
             }
         }
 
@@ -159,40 +155,41 @@ impl<'a> SessionDiagnosticDerive<'a> {
         let ast = structure.ast();
         let attrs = &ast.attrs;
 
-        // FIXME: Is there a way to avoid needing a collect() here?
-        let preamble: Vec<_> = attrs
-            .iter()
-            .map(|attr| {
-                builder
-                    .generate_structure_code(attr, VariantInfo { ident: &ast.ident })
-                    .unwrap_or_else(|v| v.to_compile_error())
-            })
-            .collect();
+        let implementation = {
+            if let syn::Data::Struct(..) = ast.data {
+                // FIXME: Is there a way to avoid needing a collect() here?
+                let preamble: Vec<_> = attrs
+                    .iter()
+                    .map(|attr| {
+                        builder
+                            .generate_structure_code(attr, VariantInfo { ident: &ast.ident })
+                            .unwrap_or_else(|v| v.to_compile_error())
+                    })
+                    .collect();
 
-        let body = structure.each(|field_binding| {
-            let field = field_binding.ast();
-            let result = field.attrs.iter().map(|attr| {
-                builder
-                    .generate_field_code(
-                        attr,
-                        FieldInfo {
-                            vis: &field.vis,
-                            binding: field_binding,
-                            ty: &field.ty,
-                            span: &field.span(),
-                        },
-                    )
-                    .unwrap_or_else(|v| v.to_compile_error())
-            });
-            return quote! {
-                #(#result);*
-            };
-        });
+                let body = structure.each(|field_binding| {
+                    let field = field_binding.ast();
+                    let result = field.attrs.iter().map(|attr| {
+                        builder
+                            .generate_field_code(
+                                attr,
+                                FieldInfo {
+                                    vis: &field.vis,
+                                    binding: field_binding,
+                                    ty: &field.ty,
+                                    span: &field.span(),
+                                },
+                            )
+                            .unwrap_or_else(|v| v.to_compile_error())
+                    });
+                    return quote! {
+                        #(#result);*
+                    };
+                });
 
-        // Finally, putting it altogether.
-        let sess = &builder.sess;
-        let diag = &builder.diag;
-        let implementation = match builder.kind {
+                // Finally, putting it altogether.
+
+                match builder.kind {
             None => {
                 (|| {
                     throw_span_err!(ast.span().unwrap(), "`code` not specified", |diag| {
@@ -203,6 +200,7 @@ impl<'a> SessionDiagnosticDerive<'a> {
             Some((kind, _)) => match kind {
                 DiagnosticId::Lint(_lint) => todo!(),
                 DiagnosticId::Error(code) => {
+                    let (diag, sess) = (&builder.diag, &builder.sess);
                     quote! {
                         let mut #diag = #sess.struct_err_with_code("", rustc_errors::DiagnosticId::Error(#code));
                         #(#preamble)*;
@@ -213,8 +211,19 @@ impl<'a> SessionDiagnosticDerive<'a> {
                     }
                 }
             },
+        }
+            } else {
+                (|| {
+                    throw_span_err!(
+                        ast.span().unwrap(),
+                        "`#[derive(SessionDiagnostic)]` can only be used on structs"
+                    )
+                })()
+                .unwrap_or_else(|err| err.to_compile_error())
+            }
         };
 
+        let (diag, sess) = (&builder.diag, &builder.sess);
         structure.gen_impl(quote! {
             gen impl<'a> rustc_session::SessionDiagnostic<'a> for @Self {
                 fn into_diagnostic(self, #sess: &'a rustc_session::Session) -> rustc_errors::DiagnosticBuilder<'a> {
