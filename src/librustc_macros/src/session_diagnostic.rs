@@ -207,7 +207,7 @@ impl<'a> SessionDeriveBuilder<'a> {
                             vis: &field.vis,
                             binding: field_binding,
                             ty: &field.ty,
-                            span: &field_binding.span(),
+                            span: &field.span(),
                         },
                     )
                     .unwrap_or_else(|v| v.to_compile_error())
@@ -436,7 +436,7 @@ impl<'a> SessionDeriveBuilderState<'a> {
                                         if span_idx.is_none() {
                                             span_idx = Some(syn::Index::from(idx));
                                         } else {
-                                            throw_span_err!(info.span.clone(), "field annotated with `#[suggestion(...)]` contains more than one span");
+                                            throw_span_err!(info.span.clone(), "type of field annotated with `#[suggestion(...)]` contains more than one Span");
                                         }
                                     } else if type_matches_path(
                                         elem,
@@ -447,7 +447,7 @@ impl<'a> SessionDeriveBuilderState<'a> {
                                         } else {
                                             throw_span_err!(
                                                 info.span.clone(),
-                                                "field annotated with `#[suggestion(...)]` contains more than one Applicability"
+                                                "type of field annotated with `#[suggestion(...)]` contains more than one Applicability"
                                             );
                                         }
                                     }
@@ -461,7 +461,9 @@ impl<'a> SessionDeriveBuilderState<'a> {
                                     return Ok((span, applicability));
                                 }
                             }
-                            throw_span_err!(info.span.clone(), "wrong types for suggestion");
+                            throw_span_err!(info.span.clone(), "wrong types for suggestion", |diag| {
+                                diag.help("#[suggestion(...)] should be applied to fields of type (Span, Applicability)")
+                            });
                         })()?;
                         // Now read the key-value pairs.
                         let mut msg = None;

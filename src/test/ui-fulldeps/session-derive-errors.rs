@@ -124,32 +124,32 @@ struct SuggestWithTypesSwapped{
 #[code = "E0123"]
 struct SuggestWithWrongTypeApplicabilityOnly{
     #[suggestion(message = "This is a message", code = "This is suggested code")]
+    //~^ ERROR wrong types for suggestion
     suggestion: Applicability,
-    //~^ ERROR The `#[suggestion(...)]` attribute can only be applied to fields of type `(Span, Applicability)`
 }
 
 #[derive(SessionDiagnostic)]
 #[code = "E0123"]
 struct SuggestWithWrongTypeSpanOnly{
     #[suggestion(message = "This is a message", code = "This is suggested code")]
+    //~^ ERROR wrong types for suggestion
     suggestion: Span,
-    //~^ ERROR The `#[suggestion(...)]` attribute can only be applied to fields of type `(Span, Applicability)`
 }
 
 #[derive(SessionDiagnostic)]
 #[code = "E0123"]
 struct SuggestWithDuplicateSpanAndApplicability {
     #[suggestion(message = "This is a message", code = "This is suggested code")]
+    //~^ ERROR type of field annotated with `#[suggestion(...)]` contains more than one Span
     suggestion: (Span, Span, Applicability),
-    //~^ ERROR field annotated with `#[suggestion(...)]` contains more than one span
 }
 
 #[derive(SessionDiagnostic)]
 #[code = "E0123"]
 struct SuggestWithDuplicateApplicabilityAndSpan {
     #[suggestion(message = "This is a message", code = "This is suggested code")]
+    //~^ ERROR type of field annotated with `#[suggestion(...)]` contains more than one
     suggestion: (Applicability, Applicability, Span),
-    //~^ ERROR field annotated with `#[suggestion(...)]` contains more than one Applicability
 }
 
 #[derive(SessionDiagnostic)]

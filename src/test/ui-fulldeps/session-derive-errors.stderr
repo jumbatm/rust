@@ -51,36 +51,40 @@ LL |     #[suggestion(code = "This is suggested code")]
    = help: provide a suggestion message using #[suggestion(message = "...")]
 
 error: wrong types for suggestion
-  --> $DIR/session-derive-errors.rs:123:10
+  --> $DIR/session-derive-errors.rs:126:5
    |
-LL | #[derive(SessionDiagnostic)]
-   |          ^^^^^^^^^^^^^^^^^
+LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
+LL | |
+LL | |     suggestion: Applicability,
+   | |_____________________________^
    |
-   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = help: #[suggestion(...)] should be applied to fields of type (Span, Applicability)
 
 error: wrong types for suggestion
-  --> $DIR/session-derive-errors.rs:131:10
+  --> $DIR/session-derive-errors.rs:134:5
    |
-LL | #[derive(SessionDiagnostic)]
-   |          ^^^^^^^^^^^^^^^^^
+LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
+LL | |
+LL | |     suggestion: Span,
+   | |____________________^
    |
-   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = help: #[suggestion(...)] should be applied to fields of type (Span, Applicability)
 
-error: field annotated with `#[suggestion(..)]` contains more than one span
-  --> $DIR/session-derive-errors.rs:139:10
+error: type of field annotated with `#[suggestion(...)]` contains more than one Span
+  --> $DIR/session-derive-errors.rs:142:5
    |
-LL | #[derive(SessionDiagnostic)]
-   |          ^^^^^^^^^^^^^^^^^
-   |
-   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
+LL | |
+LL | |     suggestion: (Span, Span, Applicability),
+   | |___________________________________________^
 
-error: field annotated with `#[suggestion(...)]` contains more than one Applicability
-  --> $DIR/session-derive-errors.rs:147:10
+error: type of field annotated with `#[suggestion(...)]` contains more than one Applicability
+  --> $DIR/session-derive-errors.rs:150:5
    |
-LL | #[derive(SessionDiagnostic)]
-   |          ^^^^^^^^^^^^^^^^^
-   |
-   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
+LL | |
+LL | |     suggestion: (Applicability, Applicability, Span),
+   | |____________________________________________________^
 
 error: aborting due to 11 previous errors
 
