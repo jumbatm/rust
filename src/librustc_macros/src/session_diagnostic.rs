@@ -51,20 +51,6 @@ pub fn session_diagnostic_derive(s: synstructure::Structure<'_>) -> proc_macro2:
     SessionDiagnosticDerive::new(diag, sess, s).into_tokens()
 }
 
-// FIXME: Remove unused fields.
-#[allow(unused)]
-struct FieldInfo<'a> {
-    vis: &'a syn::Visibility,
-    binding: &'a synstructure::BindingInfo<'a>,
-    ty: &'a syn::Type,
-    span: &'a proc_macro2::Span,
-}
-
-#[allow(unused)]
-struct VariantInfo<'a> {
-    ident: &'a syn::Ident,
-}
-
 // Checks whether the type name of `ty` matches `name`.
 //
 // Given some struct at a::b::c::Foo, this will return true for c::Foo, b::c::Foo, or
@@ -237,6 +223,22 @@ impl<'a> SessionDiagnosticDerive<'a> {
             }
         })
     }
+}
+
+
+/// Field information passed to the builder. Deliberately omits attrs to discourage the generate_*
+/// methods from walking the attributes themselves.
+struct FieldInfo<'a> {
+    vis: &'a syn::Visibility,
+    binding: &'a synstructure::BindingInfo<'a>,
+    ty: &'a syn::Type,
+    span: &'a proc_macro2::Span,
+}
+
+/// Information on the entire structure, passed to the builder. Deliberately omits attrs to
+/// discourage the generate_* methods from walking the attributes themselves.
+struct VariantInfo<'a> {
+    ident: &'a syn::Ident,
 }
 
 /// Tracks persistent information required for building up the individual calls to diagnostic
