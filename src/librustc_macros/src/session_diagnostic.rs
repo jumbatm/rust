@@ -48,8 +48,7 @@ pub fn session_diagnostic_derive(s: synstructure::Structure<'_>) -> proc_macro2:
     let diag = format_ident!("diag");
     let sess = format_ident!("sess");
 
-    let mut builder = SessionDeriveBuilder::new(diag, sess, s);
-    builder.build()
+    SessionDiagnosticDerive::new(diag, sess, s).into_tokens()
 }
 
 // FIXME: Remove unused fields.
@@ -85,14 +84,14 @@ fn type_matches_path(ty: &syn::Type, name: &[&str]) -> bool {
 }
 
 /// The central struct for constructing the as_error method from an annotated struct.
-struct SessionDeriveBuilder<'a> {
+struct SessionDiagnosticDerive<'a> {
     structure: synstructure::Structure<'a>,
-    state: SessionDeriveBuilderState<'a>,
+    builder: SessionDiagnosticDeriveBuilder<'a>,
 }
 
-impl std::convert::From<syn::Error> for SessionDeriveBuilderError {
+impl std::convert::From<syn::Error> for SessionDiagnosticDeriveError {
     fn from(e: syn::Error) -> Self {
-        SessionDeriveBuilderError::SynError(e)
+        SessionDiagnosticDeriveError::SynError(e)
     }
 }
 
@@ -103,12 +102,12 @@ enum DiagnosticId {
 }
 
 #[derive(Debug)]
-enum SessionDeriveBuilderError {
+enum SessionDiagnosticDeriveError {
     SynError(syn::Error),
     ErrorHandled,
 }
 
-impl SessionDeriveBuilderError {
+impl SessionDiagnosticDeriveError {
     fn to_compile_error(self) -> proc_macro2::TokenStream {
         match self {
             SessionDiagnosticDeriveError::SynError(e) => e.to_compile_error(),
@@ -135,13 +134,13 @@ fn _throw_span_err(
     span: proc_macro2::Span, // FIXME: Take an impl MultiSpan
     msg: &str,
     f: impl FnOnce(proc_macro::Diagnostic) -> proc_macro::Diagnostic,
-) -> SessionDeriveBuilderError {
+) -> SessionDiagnosticDeriveError {
     let mut diag = Diagnostic::spanned(span.unwrap(), proc_macro::Level::Error, msg);
     f(diag).emit();
-    SessionDeriveBuilderError::ErrorHandled
+    SessionDiagnosticDeriveError::ErrorHandled
 }
 
-impl<'a> SessionDeriveBuilder<'a> {
+impl<'a> SessionDiagnosticDerive<'a> {
     fn new(diag: syn::Ident, sess: syn::Ident, structure: synstructure::Structure<'a>) -> Self {
         // Build the mapping of field names to fields. This allows attributes to peek values from
         // other fields.
@@ -164,12 +163,12 @@ impl<'a> SessionDeriveBuilder<'a> {
         }
 
         Self {
-            state: SessionDeriveBuilderState { diag, sess, fields: fields_map, kind: None },
+            builder: SessionDiagnosticDeriveBuilder { diag, sess, fields: fields_map, kind: None },
             structure,
         }
     }
-    fn build(mut self) -> proc_macro2::TokenStream {
-        let SessionDeriveBuilder { structure, mut state } = self;
+    fn into_tokens(mut self) -> proc_macro2::TokenStream {
+        let SessionDiagnosticDerive { structure, mut builder } = self;
 
         let ast = structure.ast();
         let attrs = &ast.attrs;
@@ -178,7 +177,7 @@ impl<'a> SessionDeriveBuilder<'a> {
         let preamble: Vec<_> = attrs
             .iter()
             .map(|attr| {
-                state
+                builder
                     .generate_structure_code(attr, VariantInfo { ident: &ast.ident })
                     .unwrap_or_else(|v| v.to_compile_error())
             })
@@ -187,7 +186,7 @@ impl<'a> SessionDeriveBuilder<'a> {
         let body = structure.each(|field_binding| {
             let field = field_binding.ast();
             let result = field.attrs.iter().map(|attr| {
-                state
+                builder
                     .generate_field_code(
                         attr,
                         FieldInfo {
@@ -205,9 +204,9 @@ impl<'a> SessionDeriveBuilder<'a> {
         });
 
         // Finally, putting it altogether.
-        let sess = &state.sess;
-        let diag = &state.diag;
-        let implementation = match state.kind {
+        let sess = &builder.sess;
+        let diag = &builder.diag;
+        let implementation = match builder.kind {
             None => {
                 (|| {
                     throw_span_err!(ast.span(), "`code` not specified", |diag| {
@@ -241,10 +240,10 @@ impl<'a> SessionDeriveBuilder<'a> {
 }
 
 /// Contains all persistent information required for building up the individual calls in the
-/// as_error method. This is a separate struct to later be able to split self.state and the
+/// as_error method. This is a separate struct to later be able to split self.builder and the
 /// self.structure up to avoid a double mut borrow of self when calling the generate_* inside the
 /// closure passed to self.structure.each.
-struct SessionDeriveBuilderState<'a> {
+struct SessionDiagnosticDeriveBuilder<'a> {
     /// Name of the session parameter that's passed in to the as_error method.
     sess: syn::Ident,
 
@@ -262,12 +261,12 @@ struct SessionDeriveBuilderState<'a> {
 }
 
 #[deny(unused_must_use)]
-impl<'a> SessionDeriveBuilderState<'a> {
+impl<'a> SessionDiagnosticDeriveBuilder<'a> {
     fn generate_structure_code(
         &mut self,
         attr: &syn::Attribute,
         _info: VariantInfo<'a>, // FIXME: Remove this parameter?
-    ) -> Result<proc_macro2::TokenStream, SessionDeriveBuilderError> {
+    ) -> Result<proc_macro2::TokenStream, SessionDiagnosticDeriveError> {
         let diag = &self.diag;
         Ok(match attr.parse_meta()? {
             syn::Meta::NameValue(syn::MetaNameValue { lit: syn::Lit::Str(s), .. }) => {
@@ -303,7 +302,7 @@ impl<'a> SessionDeriveBuilderState<'a> {
         &mut self,
         kind: DiagnosticId,
         span: proc_macro2::Span,
-    ) -> Result<(), SessionDeriveBuilderError> {
+    ) -> Result<(), SessionDiagnosticDeriveError> {
         if self.kind.is_none() {
             self.kind = Some((kind, span));
             Ok(())
@@ -316,7 +315,7 @@ impl<'a> SessionDeriveBuilderState<'a> {
         &mut self,
         attr: &syn::Attribute,
         info: FieldInfo<'_>,
-    ) -> Result<proc_macro2::TokenStream, SessionDeriveBuilderError> {
+    ) -> Result<proc_macro2::TokenStream, SessionDiagnosticDeriveError> {
         let diag = &self.diag;
         let field_binding = &info.binding.binding;
         let name = attr.path.segments.last().unwrap().ident.to_string();
@@ -348,7 +347,7 @@ impl<'a> SessionDeriveBuilderState<'a> {
         &mut self,
         attr: &syn::Attribute,
         info: FieldInfo<'_>,
-    ) -> Result<proc_macro2::TokenStream, SessionDeriveBuilderError> {
+    ) -> Result<proc_macro2::TokenStream, SessionDiagnosticDeriveError> {
         let diag = &self.diag;
         let field_binding = &info.binding.binding;
         let name = attr.path.segments.last().unwrap().ident.to_string();
