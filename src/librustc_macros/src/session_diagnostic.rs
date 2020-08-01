@@ -239,10 +239,10 @@ impl<'a> SessionDiagnosticDerive<'a> {
     }
 }
 
-/// Contains all persistent information required for building up the individual calls in the
-/// as_error method. This is a separate struct to later be able to split self.builder and the
-/// self.structure up to avoid a double mut borrow of self when calling the generate_* inside the
-/// closure passed to self.structure.each.
+/// Tracks persistent information required for building up the individual calls to diagnostic
+/// methods for the final generated method. This is a separate struct to SessionDerive only to be
+/// able to destructure and split self.builder and the self.structure up to avoid a double mut
+/// borrow later on.
 struct SessionDiagnosticDeriveBuilder<'a> {
     /// Name of the session parameter that's passed in to the as_error method.
     sess: syn::Ident,
