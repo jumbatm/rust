@@ -32,7 +32,7 @@ use std::collections::{HashMap, HashSet};
 /// ```
 /// Then, later, to emit the error:
 ///
-/// ```ignore (todo-make-this-not-ignore)
+/// ```ignore (pseudo-rust)
 /// sess.emit_err(MoveOutOfBorrowError {
 ///     expected,
 ///     actual,
@@ -41,7 +41,6 @@ use std::collections::{HashMap, HashSet};
 ///     opt_sugg: Some(suggestion, Applicability::MachineApplicable),
 /// });
 /// ```
-// FIXME: Make the marked example above not ignore anymore once that API is implemented.
 pub fn session_diagnostic_derive(s: synstructure::Structure<'_>) -> proc_macro2::TokenStream {
     // Names for the diagnostic we build and the session we build it from.
     let diag = format_ident!("diag");
