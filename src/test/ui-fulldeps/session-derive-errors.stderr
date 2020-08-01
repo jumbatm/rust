@@ -3,12 +3,6 @@ error: `code` specified multiple times
    |
 LL | #[code = "E0456"]
    | ^^^^^^^^^^^^^^^^^
-   |
-note: error code already provided here
-  --> $DIR/session-derive-errors.rs:29:1
-   |
-LL | #[code = "E0123"]
-   | ^^^^^^^^^^^^^^^^^
 
 error: `code` not specified
   --> $DIR/session-derive-errors.rs:34:1

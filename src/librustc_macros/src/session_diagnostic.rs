@@ -90,6 +90,12 @@ struct SessionDeriveBuilder<'a> {
     state: SessionDeriveBuilderState<'a>,
 }
 
+impl std::convert::From<syn::Error> for SessionDeriveBuilderError {
+    fn from(e: syn::Error) -> Self {
+        SessionDeriveBuilderError::SynError(e)
+    }
+}
+
 #[allow(unused)]
 enum DiagnosticId {
     Error(proc_macro2::TokenStream),
@@ -97,61 +103,42 @@ enum DiagnosticId {
 }
 
 #[derive(Debug)]
-enum SessionDeriveBuilderErrorKind {
+enum SessionDeriveBuilderError {
     SynError(syn::Error),
-    IdNotProvided,
-    IdMultiplyProvided(proc_macro2::Span),
-    /// Diagnostic was already emitted, so no further action required.
     ErrorHandled,
-}
-
-#[derive(Debug)]
-struct SessionDeriveBuilderError {
-    kind: SessionDeriveBuilderErrorKind,
-    span: proc_macro2::Span,
 }
 
 impl SessionDeriveBuilderError {
     fn to_compile_error(self) -> proc_macro2::TokenStream {
-        let diag = match self.kind {
-            SessionDeriveBuilderErrorKind::ErrorHandled => {
-                return quote!();
+        match self {
+            SessionDiagnosticDeriveError::SynError(e) => e.to_compile_error(),
+            SessionDiagnosticDeriveError::ErrorHandled => {
+                // Return ! to avoid having to create a blank DiagnosticBuilder to return when an
+                // error has already been emitted to the compiler.
+                quote! {
+                    unreachable!()
+                }
             }
-            SessionDeriveBuilderErrorKind::IdMultiplyProvided(orig_span) => Diagnostic::spanned(
-                self.span.unwrap(),
-                proc_macro::Level::Error,
-                "`code` specified multiple times",
-            )
-            .span_note(orig_span.unwrap(), "error code already provided here"),
-            SessionDeriveBuilderErrorKind::IdNotProvided => {
-                Diagnostic::spanned(
-                    self.span.unwrap(),
-                    proc_macro::Level::Error,
-                    "`code` not specified",
-                ) // FIXME: Add help message.
-                .help("use the [code = \"...\"] attribute to set this diagnostic's error code ")
-            }
-            SessionDeriveBuilderErrorKind::SynError(e) => {
-                return e.to_compile_error();
-            }
-        };
-        diag.emit();
-
-        // Return ! to avoid having to return a DiagnosticBuilder in the event of an error emitted
-        // by the compiler.
-        quote! {
-            unreachable!()
         }
     }
 }
 
-impl std::convert::From<syn::Error> for SessionDeriveBuilderError {
-    fn from(e: syn::Error) -> Self {
-        SessionDeriveBuilderError {
-            span: e.span(),
-            kind: SessionDeriveBuilderErrorKind::SynError(e),
-        }
-    }
+macro_rules! throw_span_err {
+    ($span:expr, $msg:expr) => {{
+        throw_span_err!($span, $msg, |diag| diag)
+    }};
+    ($span:expr, $msg:expr, $f:expr) => {{
+        return Err(_throw_span_err($span, $msg, $f));
+    }};
+}
+fn _throw_span_err(
+    span: proc_macro2::Span, // FIXME: Take an impl MultiSpan
+    msg: &str,
+    f: impl FnOnce(proc_macro::Diagnostic) -> proc_macro::Diagnostic,
+) -> SessionDeriveBuilderError {
+    let mut diag = Diagnostic::spanned(span.unwrap(), proc_macro::Level::Error, msg);
+    f(diag).emit();
+    SessionDeriveBuilderError::ErrorHandled
 }
 
 impl<'a> SessionDeriveBuilder<'a> {
@@ -217,15 +204,18 @@ impl<'a> SessionDeriveBuilder<'a> {
             };
         });
 
-        // Finally, put it all together.
+        // Finally, putting it altogether.
         let sess = &state.sess;
         let diag = &state.diag;
         let implementation = match state.kind {
-            None => Err(SessionDeriveBuilderError {
-                kind: SessionDeriveBuilderErrorKind::IdNotProvided,
-                span: structure.ast().span(),
-            }),
-            Some((kind, _)) => Ok(match kind {
+            None => {
+                (|| {
+                    throw_span_err!(ast.span(), "`code` not specified", |diag| {
+                        diag.help("use the [code = \"...\"] attribute to set this diagnostic's error code ")
+                    });
+                })().unwrap_or_else(|err| err.to_compile_error())
+            }
+            Some((kind, _)) => match kind {
                 DiagnosticId::Lint(_lint) => todo!(),
                 DiagnosticId::Error(code) => {
                     quote! {
@@ -237,12 +227,7 @@ impl<'a> SessionDeriveBuilder<'a> {
                         #diag
                     }
                 }
-            }),
-        };
-
-        let implementation = match implementation {
-            Ok(x) => x,
-            Err(e) => e.to_compile_error(),
+            },
         };
 
         structure.gen_impl(quote! {
@@ -274,25 +259,6 @@ struct SessionDeriveBuilderState<'a> {
     /// stores at what Span the kind was first set at (for error reporting purposes, if the kind
     /// was multiply specified).
     kind: Option<(DiagnosticId, proc_macro2::Span)>,
-}
-
-fn _throw_span_err(
-    span: proc_macro2::Span,
-    msg: &str,
-    f: impl FnOnce(proc_macro::Diagnostic) -> proc_macro::Diagnostic,
-) -> SessionDeriveBuilderError {
-    let mut diag = Diagnostic::spanned(span.unwrap(), proc_macro::Level::Error, msg);
-    f(diag).emit();
-    SessionDeriveBuilderError { span, kind: SessionDeriveBuilderErrorKind::ErrorHandled }
-}
-
-macro_rules! throw_span_err {
-    ($span:expr, $msg:expr) => {{
-        throw_span_err!($span, $msg, |diag| diag)
-    }};
-    ($span:expr, $msg:expr, $f:expr) => {{
-        return Err(_throw_span_err($span, $msg, $f));
-    }};
 }
 
 #[deny(unused_must_use)]
@@ -342,12 +308,7 @@ impl<'a> SessionDeriveBuilderState<'a> {
             self.kind = Some((kind, span));
             Ok(())
         } else {
-            Err(SessionDeriveBuilderError {
-                kind: SessionDeriveBuilderErrorKind::IdMultiplyProvided(
-                    self.kind.as_ref().unwrap().1,
-                ),
-                span,
-            })
+            throw_span_err!(span, "`code` specified multiple times");
         }
     }
 
@@ -365,7 +326,12 @@ impl<'a> SessionDeriveBuilderState<'a> {
 
         let generated_code = self.generate_non_option_field_code(
             attr,
-            FieldInfo { vis: info.vis, binding: info.binding, ty: option_ty.unwrap_or(&info.ty), span: info.span },
+            FieldInfo {
+                vis: info.vis,
+                binding: info.binding,
+                ty: option_ty.unwrap_or(&info.ty),
+                span: info.span,
+            },
         )?;
         Ok(if option_ty.is_none() {
             quote! { #generated_code }
@@ -461,9 +427,13 @@ impl<'a> SessionDeriveBuilderState<'a> {
                                     return Ok((span, applicability));
                                 }
                             }
-                            throw_span_err!(info.span.clone(), "wrong types for suggestion", |diag| {
-                                diag.help("#[suggestion(...)] should be applied to fields of type (Span, Applicability)")
-                            });
+                            throw_span_err!(
+                                info.span.clone(),
+                                "wrong types for suggestion",
+                                |diag| {
+                                    diag.help("#[suggestion(...)] should be applied to fields of type (Span, Applicability)")
+                                }
+                            );
                         })()?;
                         // Now read the key-value pairs.
                         let mut msg = None;
@@ -491,12 +461,13 @@ impl<'a> SessionDeriveBuilderState<'a> {
                                         "code" => {
                                             code = Some(formatted_str);
                                         }
-                                        other => {
-                                            throw_span_err!(
-                                                arg.span(),
-                                                &format!("`{}` is not a valid key for `#[suggestion(...)]`", other)
+                                        other => throw_span_err!(
+                                            arg.span(),
+                                            &format!(
+                                                "`{}` is not a valid key for `#[suggestion(...)]`",
+                                                other
                                             )
-                                        }
+                                        ),
                                     }
                                 }
                             }
