@@ -107,9 +107,7 @@ impl SessionDiagnosticDeriveError {
 }
 
 macro_rules! throw_span_err {
-    ($span:expr, $msg:expr) => {{
-        throw_span_err!($span, $msg, |diag| diag)
-    }};
+    ($span:expr, $msg:expr) => {{ throw_span_err!($span, $msg, |diag| diag) }};
     ($span:expr, $msg:expr, $f:expr) => {{
         return Err(_throw_span_err($span, $msg, $f));
     }};
@@ -541,10 +539,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                         }
                     }
                     // Eat until (and including) the matching '}'
-                    while it
-                        .next()?
-                        != '}'
-                    {
+                    while it.next()? != '}' {
                         continue;
                     }
                     Some(result)
