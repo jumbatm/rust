@@ -38,4 +38,13 @@ decl_derive!([MetadataDecodable] => serialize::meta_decodable_derive);
 decl_derive!([MetadataEncodable] => serialize::meta_encodable_derive);
 decl_derive!([TypeFoldable, attributes(type_foldable)] => type_foldable::type_foldable_derive);
 decl_derive!([Lift, attributes(lift)] => lift::lift_derive);
-decl_derive!([SessionDiagnostic, attributes(code, error, label, suggestion)] => session_diagnostic::session_diagnostic_derive);
+decl_derive!(
+    [SessionDiagnostic, attributes(
+        code,
+        error,
+        label,
+        suggestion,
+        suggestion_short,
+        suggestion_hidden,
+        suggestion_verbose)] => session_diagnostic::session_diagnostic_derive
+);

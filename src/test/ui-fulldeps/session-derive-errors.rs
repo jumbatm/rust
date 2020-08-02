@@ -105,6 +105,9 @@ struct LabelOnNonSpan {
 #[code = "E0123"]
 struct Suggest {
     #[suggestion(message = "This is a suggestion", code = "This is the suggested code")]
+    #[suggestion_short(message = "This is a suggestion", code = "This is the suggested code")]
+    #[suggestion_hidden(message = "This is a suggestion", code = "This is the suggested code")]
+    #[suggestion_verbose(message = "This is a suggestion", code = "This is the suggested code")]
     suggestion: (Span, Applicability),
 }
 
