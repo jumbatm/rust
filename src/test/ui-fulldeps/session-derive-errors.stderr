@@ -29,26 +29,46 @@ error: `name` doesn't refer to a field on this type
 LL |     #[error = "This error has a field, and references {name}"]
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+error: invalid format string: expected `'}'` but string was terminated
+  --> $DIR/session-derive-errors.rs:71:2
+   |
+LL | #[code = "E0123"]
+   |               - because of this opening brace
+LL | #[error = "This is missing a closing brace: {name"]
+   |  ^ expected `'}'` in format string
+   |
+   = note: if you intended to print `{`, you can escape it using `{{`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: invalid format string: unmatched `}` found
+  --> $DIR/session-derive-errors.rs:80:2
+   |
+LL | #[error = "This is missing an opening brace: name}"]
+   |  ^ unmatched `}` in format string
+   |
+   = note: if you intended to print `}`, you can escape it using `}}`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
 error: The `#[label = ...]` attribute can only be applied to fields of type Span
-  --> $DIR/session-derive-errors.rs:81:5
+  --> $DIR/session-derive-errors.rs:99:5
    |
 LL |     #[label = "See here"]
    |     ^^^^^^^^^^^^^^^^^^^^^
 
 error: `nonsense` is not a valid key for `#[suggestion(...)]`
-  --> $DIR/session-derive-errors.rs:103:18
+  --> $DIR/session-derive-errors.rs:121:18
    |
 LL |     #[suggestion(nonsense = "This is nonsense")]
    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: `msg` is not a valid key for `#[suggestion(...)]`
-  --> $DIR/session-derive-errors.rs:111:18
+  --> $DIR/session-derive-errors.rs:129:18
    |
 LL |     #[suggestion(msg = "This is a suggestion")]
    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: missing suggestion message
-  --> $DIR/session-derive-errors.rs:119:7
+  --> $DIR/session-derive-errors.rs:137:7
    |
 LL |     #[suggestion(code = "This is suggested code")]
    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -56,7 +76,7 @@ LL |     #[suggestion(code = "This is suggested code")]
    = help: provide a suggestion message using #[suggestion(message = "...")]
 
 error: wrong types for suggestion
-  --> $DIR/session-derive-errors.rs:134:5
+  --> $DIR/session-derive-errors.rs:152:5
    |
 LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
 LL | |
@@ -66,7 +86,7 @@ LL | |     suggestion: Applicability,
    = help: #[suggestion(...)] should be applied to fields of type (Span, Applicability)
 
 error: wrong types for suggestion
-  --> $DIR/session-derive-errors.rs:142:5
+  --> $DIR/session-derive-errors.rs:160:5
    |
 LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
 LL | |
@@ -76,7 +96,7 @@ LL | |     suggestion: Span,
    = help: #[suggestion(...)] should be applied to fields of type (Span, Applicability)
 
 error: type of field annotated with `#[suggestion(...)]` contains more than one Span
-  --> $DIR/session-derive-errors.rs:150:5
+  --> $DIR/session-derive-errors.rs:168:5
    |
 LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
 LL | |
@@ -84,7 +104,7 @@ LL | |     suggestion: (Span, Span, Applicability),
    | |___________________________________________^
 
 error: type of field annotated with `#[suggestion(...)]` contains more than one Applicability
-  --> $DIR/session-derive-errors.rs:158:5
+  --> $DIR/session-derive-errors.rs:176:5
    |
 LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
 LL | |
@@ -92,10 +112,10 @@ LL | |     suggestion: (Applicability, Applicability, Span),
    | |____________________________________________________^
 
 error: invalid annotation list `#[label(...)]`
-  --> $DIR/session-derive-errors.rs:166:7
+  --> $DIR/session-derive-errors.rs:184:7
    |
 LL |     #[label("wrong kind of annotation for label")]
    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: aborting due to 13 previous errors
+error: aborting due to 15 previous errors
 

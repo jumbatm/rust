@@ -524,7 +524,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
         while let Some(c) = it.next() {
             if c == '{' && *it.peek().unwrap_or(&'\0') != '{' {
                 #[must_use]
-                let mut eat_argument = || -> String {
+                let mut eat_argument = || -> Option<String> {
                     let mut result = String::new();
                     // Format specifiers look like
                     // format   := '{' [ argument ] [ ':' format_spec ] '}' .
@@ -542,17 +542,17 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                     }
                     // Eat until (and including) the matching '}'
                     while it
-                        .next()
-                        .expect("Fell off end of format string without finding closing brace")
+                        .next()?
                         != '}'
                     {
                         continue;
                     }
-                    result
+                    Some(result)
                 };
 
-                let referenced_field = eat_argument(); // FIXME: Inline eat_argument
-                referenced_fields.insert(referenced_field);
+                if let Some(referenced_field) = eat_argument() {
+                    referenced_fields.insert(referenced_field);
+                }
             }
         }
         // At this point, `referenced_fields` contains a set of the unique fields that were

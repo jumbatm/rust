@@ -68,6 +68,24 @@ struct ErrorWithNonexistentField {
 
 #[derive(SessionDiagnostic)]
 #[code = "E0123"]
+#[error = "This is missing a closing brace: {name"]
+//~^ ERROR invalid format string: expected `'}'`
+struct ErrorMissingClosingBrace {
+    name: String,
+    span: Span
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+#[error = "This is missing an opening brace: name}"]
+//~^ ERROR invalid format string: unmatched `}`
+struct ErrorMissingOpeningBrace {
+    name: String,
+    span: Span
+}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
 #[error = "Something something"]
 struct LabelOnSpan {
     #[label = "See here"]
