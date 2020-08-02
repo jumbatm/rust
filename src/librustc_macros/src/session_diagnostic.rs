@@ -152,15 +152,16 @@ impl<'a> SessionDiagnosticDerive<'a> {
 
         let implementation = {
             if let syn::Data::Struct(..) = ast.data {
-                // FIXME: Is there a way to avoid needing a collect() here?
-                let preamble: Vec<_> = attrs
-                    .iter()
-                    .map(|attr| {
+                let preamble = {
+                    let preamble = attrs.iter().map(|attr| {
                         builder
                             .generate_structure_code(attr)
                             .unwrap_or_else(|v| v.to_compile_error())
-                    })
-                    .collect();
+                    });
+                    quote! {
+                        #(#preamble)*;
+                    }
+                };
 
                 let body = structure.each(|field_binding| {
                     let field = field_binding.ast();
@@ -181,9 +182,7 @@ impl<'a> SessionDiagnosticDerive<'a> {
                         #(#result);*
                     };
                 });
-
                 // Finally, putting it altogether.
-
                 match builder.kind {
             None => {
                 (|| {
@@ -198,7 +197,7 @@ impl<'a> SessionDiagnosticDerive<'a> {
                     let (diag, sess) = (&builder.diag, &builder.sess);
                     quote! {
                         let mut #diag = #sess.struct_err_with_code("", rustc_errors::DiagnosticId::Error(#code));
-                        #(#preamble)*;
+                        #preamble
                         match self {
                             #body
                         }
