@@ -33,6 +33,20 @@ enum SessionDiagnosticOnEnum {
 }
 
 #[derive(SessionDiagnostic)]
+#[code = "E0123"]
+#[label = "This is in the wrong place"]
+//~^ ERROR `#[label = ...]` is not a valid SessionDiagnostic struct attribute
+struct WrongPlace {}
+
+#[derive(SessionDiagnostic)]
+#[code = "E0123"]
+struct WrongPlaceField {
+    #[suggestion = "this is the wrong kind of attribute"]
+//~^ ERROR `#[suggestion = ...]` is not a valid SessionDiagnostic field attribute
+    sp: Span,
+}
+
+#[derive(SessionDiagnostic)]
 #[error = "Hello, world!"]
 #[code = "E0123"]
 #[code = "E0456"] //~ ERROR `code` specified multiple times

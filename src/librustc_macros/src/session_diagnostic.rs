@@ -295,7 +295,13 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                         // As with `code`, this attribute is only allowed once.
                         quote! {}
                     }
-                    other => unimplemented!("Didn't recognise name: {}", other),
+                    other => throw_span_err!(
+                        attr.span().unwrap(),
+                        &format!(
+                            "`#[{} = ...]` is not a valid SessionDiagnostic struct attribute",
+                            other
+                        )
+                    ),
                 }
             }
             _ => todo!("unhandled meta kind"),
@@ -379,10 +385,19 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                 #diag.span_label(*#field_binding, #formatted_str);
                             }
                         } else {
-                            throw_span_err!(attr.span().unwrap(), "The `#[label = ...]` attribute can only be applied to fields of type Span");
+                            throw_span_err!(
+                                attr.span().unwrap(),
+                                "The `#[label = ...]` attribute can only be applied to fields of type Span"
+                            );
                         }
                     }
-                    other => todo!("Unrecognised field: {}", other),
+                    other => throw_span_err!(
+                        attr.span().unwrap(),
+                        &format!(
+                            "`#[{} = ...]` is not a valid SessionDiagnostic field attribute",
+                            other
+                        )
+                    ),
                 }
             }
             syn::Meta::List(list) => {
