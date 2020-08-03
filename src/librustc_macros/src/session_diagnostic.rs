@@ -106,18 +106,29 @@ impl SessionDiagnosticDeriveError {
     }
 }
 
+fn span_err(span: impl proc_macro::MultiSpan, msg: &str) -> proc_macro::Diagnostic {
+    Diagnostic::spanned(span, proc_macro::Level::Error, msg)
+}
+
+/// For use methods that return a Result<_, SessionDiagnosticDeriveError>: emit a diagnostic on
+/// span $span with msg $msg (and, optionally, perform additional decoration using the FnOnce
+/// passed in `diag`). Then, return Err(ErrorHandled).
 macro_rules! throw_span_err {
     ($span:expr, $msg:expr) => {{ throw_span_err!($span, $msg, |diag| diag) }};
     ($span:expr, $msg:expr, $f:expr) => {{
         return Err(_throw_span_err($span, $msg, $f));
     }};
 }
+
+/// When possible, prefer using throw_span_err! over using this function directly. This only exists
+/// as a function to constrain `f` to an impl FnOnce.
+#[doc(hidden)]
 fn _throw_span_err(
     span: impl proc_macro::MultiSpan,
     msg: &str,
     f: impl FnOnce(proc_macro::Diagnostic) -> proc_macro::Diagnostic,
 ) -> SessionDiagnosticDeriveError {
-    let diag = Diagnostic::spanned(span, proc_macro::Level::Error, msg);
+    let diag = span_err(span, msg);
     f(diag).emit();
     SessionDiagnosticDeriveError::ErrorHandled
 }
@@ -184,36 +195,34 @@ impl<'a> SessionDiagnosticDerive<'a> {
                 });
                 // Finally, putting it altogether.
                 match builder.kind {
-            None => {
-                (|| {
-                    throw_span_err!(ast.span().unwrap(), "`code` not specified", |diag| {
-                        diag.help("use the [code = \"...\"] attribute to set this diagnostic's error code ")
-                    });
-                })().unwrap_or_else(|err| err.to_compile_error())
-            }
-            Some((kind, _)) => match kind {
-                DiagnosticId::Lint(_lint) => todo!(),
-                DiagnosticId::Error(code) => {
-                    let (diag, sess) = (&builder.diag, &builder.sess);
-                    quote! {
-                        let mut #diag = #sess.struct_err_with_code("", rustc_errors::DiagnosticId::Error(#code));
-                        #preamble
-                        match self {
-                            #body
-                        }
-                        #diag
+                    None => {
+                        span_err(ast.span().unwrap(), "`code` not specified")
+                        .help("use the [code = \"...\"] attribute to set this diagnostic's error code ")
+                        .emit();
+                        SessionDiagnosticDeriveError::ErrorHandled.to_compile_error()
                     }
+                    Some((kind, _)) => match kind {
+                        DiagnosticId::Lint(_lint) => todo!(),
+                        DiagnosticId::Error(code) => {
+                            let (diag, sess) = (&builder.diag, &builder.sess);
+                            quote! {
+                                let mut #diag = #sess.struct_err_with_code("", rustc_errors::DiagnosticId::Error(#code));
+                                #preamble
+                                match self {
+                                    #body
+                                }
+                                #diag
+                            }
+                        }
+                    },
                 }
-            },
-        }
             } else {
-                (|| {
-                    throw_span_err!(
-                        ast.span().unwrap(),
-                        "`#[derive(SessionDiagnostic)]` can only be used on structs"
-                    )
-                })()
-                .unwrap_or_else(|err| err.to_compile_error())
+                span_err(
+                    ast.span().unwrap(),
+                    "`#[derive(SessionDiagnostic)]` can only be used on structs",
+                )
+                .emit();
+                SessionDiagnosticDeriveError::ErrorHandled.to_compile_error()
             }
         };
 
@@ -370,8 +379,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                 #diag.span_label(*#field_binding, #formatted_str);
                             }
                         } else {
-                            Diagnostic::spanned(attr.span().unwrap(), proc_macro::Level::Error, "The `#[label = ...]` attribute can only be applied to fields of type Span").emit();
-                            quote!()
+                            throw_span_err!(attr.span().unwrap(), "The `#[label = ...]` attribute can only be applied to fields of type Span");
                         }
                     }
                     other => todo!("Unrecognised field: {}", other),
