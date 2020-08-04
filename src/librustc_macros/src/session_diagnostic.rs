@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 /// Implements #[derive(SessionDiagnostic)], which allows for errors to be specified as a struct, independent
 /// from the actual diagnostics emitting code.
-/// ```
+/// ```ignore (pseudo-rust)
 /// # extern crate rustc_errors;
 /// # use rustc_errors::Applicability;
 /// # extern crate rustc_span;

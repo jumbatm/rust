@@ -236,7 +236,8 @@ enum DiagnosticBuilderMethod {
                             // Add more variants as needed to support one-time diagnostics.
 }
 
-/// Trait implemented by error types. See [rustc_builtin_macros::as_error_derive].
+/// Trait implemented by error types. This should not be implemented manually. Instead, use
+/// `#[derive(SessionDiagnostic)]` -- see [rustc_macros::SessionDiagnostic].
 pub trait SessionDiagnostic<'a> {
     /// Write out as a diagnostic out of `sess`.
     #[must_use]
