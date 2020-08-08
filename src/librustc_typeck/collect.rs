@@ -44,12 +44,11 @@ use rustc_session::config::SanitizerSet;
 use rustc_session::lint;
 use rustc_session::parse::feature_err;
 //use rustc_session::SessionError;
+use crate::errors;
 use rustc_span::symbol::{kw, sym, Ident, Symbol};
 use rustc_span::{Span, DUMMY_SP};
 use rustc_target::spec::abi;
 use rustc_trait_selection::traits::error_reporting::suggestions::NextTypeParamName;
-
-use rustc_macros::SessionDiagnostic;
 
 mod type_of;
 
@@ -835,18 +834,7 @@ fn convert_variant(
             let fid = tcx.hir().local_def_id(f.hir_id);
             let dup_span = seen_fields.get(&f.ident.normalize_to_macros_2_0()).cloned();
             if let Some(prev_span) = dup_span {
-                #[derive(SessionDiagnostic)]
-                #[code = "E0124"]
-                struct FieldAlreadyDeclared {
-                    field_name: String,
-                    #[error = "field `{field_name}` is already declared"]
-                    #[label = "field already declared"]
-                    span: Span,
-                    #[label = "`{field_name}` first declared here"]
-                    prev_span: Span,
-                }
-
-                tcx.sess.emit_err(FieldAlreadyDeclared {
+                tcx.sess.emit_err(errors::FieldAlreadyDeclared {
                     field_name: f.ident.to_string(),
                     span: f.span,
                     prev_span,

@@ -83,6 +83,7 @@ mod check_unused;
 mod coherence;
 mod collect;
 mod constrained_generic_params;
+mod errors;
 mod impl_wf_check;
 mod mem_categorization;
 mod outlives;
