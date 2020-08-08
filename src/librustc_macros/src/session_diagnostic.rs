@@ -110,7 +110,7 @@ fn span_err(span: impl proc_macro::MultiSpan, msg: &str) -> proc_macro::Diagnost
     Diagnostic::spanned(span, proc_macro::Level::Error, msg)
 }
 
-/// For use methods that return a Result<_, SessionDiagnosticDeriveError>: emit a diagnostic on
+/// For methods that return a Result<_, SessionDiagnosticDeriveError>: emit a diagnostic on
 /// span $span with msg $msg (and, optionally, perform additional decoration using the FnOnce
 /// passed in `diag`). Then, return Err(ErrorHandled).
 macro_rules! throw_span_err {
@@ -603,7 +603,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
     }
 }
 
-/// /// If `ty` is an Option, returns Some(inner type). Else, returns None.
+/// If `ty` is an Option, returns Some(inner type). Else, returns None.
 fn option_inner_ty(ty: &syn::Type) -> Option<&syn::Type> {
     if type_matches_path(ty, &["std", "option", "Option"]) {
         if let syn::Type::Path(ty_path) = ty {
@@ -611,7 +611,7 @@ fn option_inner_ty(ty: &syn::Type) -> Option<&syn::Type> {
             let ty = path.segments.iter().last().unwrap();
             if let syn::PathArguments::AngleBracketed(bracketed) = &ty.arguments {
                 if bracketed.args.len() == 1 {
-                    if let syn::GenericArgument::Type(ty) = bracketed.args.iter().next().unwrap() {
+                    if let syn::GenericArgument::Type(ty) = &bracketed.args[0] {
                         return Some(ty);
                     }
                 }
