@@ -122,7 +122,6 @@ macro_rules! throw_span_err {
 
 /// When possible, prefer using throw_span_err! over using this function directly. This only exists
 /// as a function to constrain `f` to an impl FnOnce.
-#[doc(hidden)]
 fn _throw_span_err(
     span: impl proc_macro::MultiSpan,
     msg: &str,
