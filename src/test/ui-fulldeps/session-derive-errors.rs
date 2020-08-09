@@ -183,24 +183,23 @@ struct SuggestWithoutMsg {
 
 #[derive(SessionDiagnostic)]
 #[error = "E0123"]
-struct SuggestWithTypesSwapped{
+struct SuggestWithTypesSwapped {
     #[suggestion(message = "This is a message", code = "This is suggested code")]
     suggestion: (Applicability, Span),
 }
 
 #[derive(SessionDiagnostic)]
 #[error = "E0123"]
-struct SuggestWithWrongTypeApplicabilityOnly{
+struct SuggestWithWrongTypeApplicabilityOnly {
     #[suggestion(message = "This is a message", code = "This is suggested code")]
-    //~^ ERROR wrong types for suggestion
+    //~^ ERROR wrong field type for suggestion
     suggestion: Applicability,
 }
 
 #[derive(SessionDiagnostic)]
 #[error = "E0123"]
-struct SuggestWithWrongTypeSpanOnly{
+struct SuggestWithSpanOnly{
     #[suggestion(message = "This is a message", code = "This is suggested code")]
-    //~^ ERROR wrong types for suggestion
     suggestion: Span,
 }
 

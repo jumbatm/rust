@@ -426,8 +426,17 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                     | suggestion_kind @ "suggestion_verbose" => {
                         // For suggest, we need to ensure we are running on a (Span,
                         // Applicability) pair.
-                        let (span, applicability) = (|| {
-                            if let syn::Type::Tuple(tup) = &info.ty {
+                        let (span, applicability) = (|| match &info.ty {
+                            ty @ syn::Type::Path(..)
+                                if type_matches_path(ty, &["rustc_span", "Span"]) =>
+                            {
+                                let binding = &info.binding.binding;
+                                Ok((
+                                    quote!(*#binding),
+                                    quote!(rustc_errors::Applicability::Unspecified),
+                                ))
+                            }
+                            syn::Type::Tuple(tup) => {
                                 let mut span_idx = None;
                                 let mut applicability_idx = None;
                                 for (idx, elem) in tup.elems.iter().enumerate() {
@@ -454,22 +463,33 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                         }
                                     }
                                 }
-                                if let (Some(span_idx), Some(applicability_idx)) =
-                                    (span_idx, applicability_idx)
-                                {
+                                if let Some(span_idx) = span_idx {
                                     let binding = &info.binding.binding;
                                     let span = quote!(#binding.#span_idx);
-                                    let applicability = quote!(#binding.#applicability_idx);
+                                    let applicability = applicability_idx
+                                        .map(
+                                            |applicability_idx| quote!(#binding.#applicability_idx),
+                                        )
+                                        .unwrap_or(quote!(
+                                            rustc_errors::Applicability::Unspecified
+                                        ));
                                     return Ok((span, applicability));
                                 }
+                                throw_span_err!(
+                                    info.span.clone().unwrap(),
+                                    "wrong types for suggestion",
+                                    |diag| {
+                                        diag.help("#[suggestion(...)] on a tuple field must be applied to fields of type (Span, Applicability)")
+                                    }
+                                );
                             }
-                            throw_span_err!(
+                            _ => throw_span_err!(
                                 info.span.clone().unwrap(),
-                                "wrong types for suggestion",
+                                "wrong field type for suggestion",
                                 |diag| {
-                                    diag.help("#[suggestion(...)] should be applied to fields of type (Span, Applicability)")
+                                    diag.help("#[suggestion(...)] should be applied to fields of type Span or (Span, Applicability)")
                                 }
-                            );
+                            ),
                         })()?;
                         // Now read the key-value pairs.
                         let mut msg = None;

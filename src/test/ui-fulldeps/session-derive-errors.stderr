@@ -99,7 +99,7 @@ LL |     #[suggestion(code = "This is suggested code")]
    |
    = help: provide a suggestion message using #[suggestion(message = "...")]
 
-error: wrong types for suggestion
+error: wrong field type for suggestion
   --> $DIR/session-derive-errors.rs:194:5
    |
 LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
@@ -107,20 +107,10 @@ LL | |
 LL | |     suggestion: Applicability,
    | |_____________________________^
    |
-   = help: #[suggestion(...)] should be applied to fields of type (Span, Applicability)
-
-error: wrong types for suggestion
-  --> $DIR/session-derive-errors.rs:202:5
-   |
-LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
-LL | |
-LL | |     suggestion: Span,
-   | |____________________^
-   |
-   = help: #[suggestion(...)] should be applied to fields of type (Span, Applicability)
+   = help: #[suggestion(...)] should be applied to fields of type Span or (Span, Applicability)
 
 error: type of field annotated with `#[suggestion(...)]` contains more than one Span
-  --> $DIR/session-derive-errors.rs:210:5
+  --> $DIR/session-derive-errors.rs:209:5
    |
 LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
 LL | |
@@ -128,7 +118,7 @@ LL | |     suggestion: (Span, Span, Applicability),
    | |___________________________________________^
 
 error: type of field annotated with `#[suggestion(...)]` contains more than one Applicability
-  --> $DIR/session-derive-errors.rs:218:5
+  --> $DIR/session-derive-errors.rs:217:5
    |
 LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
 LL | |
@@ -136,10 +126,10 @@ LL | |     suggestion: (Applicability, Applicability, Span),
    | |____________________________________________________^
 
 error: invalid annotation list `#[label(...)]`
-  --> $DIR/session-derive-errors.rs:226:7
+  --> $DIR/session-derive-errors.rs:225:7
    |
 LL |     #[label("wrong kind of annotation for label")]
    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: aborting due to 19 previous errors
+error: aborting due to 18 previous errors
 
