@@ -79,7 +79,8 @@ impl std::convert::From<syn::Error> for SessionDiagnosticDeriveError {
     }
 }
 
-#[allow(unused)]
+/// Equivalent to rustc:errors::diagnostic::DiagnosticId, except stores the quoted expression to
+/// initialise the code with.
 enum DiagnosticId {
     Error(proc_macro2::TokenStream),
     Lint(proc_macro2::TokenStream),
@@ -271,27 +272,31 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
         &mut self,
         attr: &syn::Attribute,
     ) -> Result<proc_macro2::TokenStream, SessionDiagnosticDeriveError> {
-        let diag = &self.diag;
         Ok(match attr.parse_meta()? {
             syn::Meta::NameValue(syn::MetaNameValue { lit: syn::Lit::Str(s), .. }) => {
                 let formatted_str = self.build_format(&s.value(), attr.span());
                 let name = attr.path.segments.last().unwrap().ident.to_string();
                 let name = name.as_str();
                 match name {
-                    "error" => {
+                    "message" => {
+                        let diag = &self.diag;
                         quote! {
                             #diag.set_primary_message(#formatted_str);
                         }
                     }
-                    "code" => {
-                        self.set_kind_once(DiagnosticId::Error(formatted_str), attr.span())?;
+                    attr @ "error" | attr @ "lint" => {
+                        self.set_kind_once(
+                            if attr == "error" {
+                                DiagnosticId::Error(formatted_str)
+                            } else if attr == "lint" {
+                                DiagnosticId::Lint(formatted_str)
+                            } else {
+                                unreachable!()
+                            },
+                            s.span(),
+                        )?;
                         // This attribute is only allowed to be applied once, and the attribute
                         // will be set in the initialisation code.
-                        quote! {}
-                    }
-                    "lint" => {
-                        self.set_kind_once(DiagnosticId::Lint(formatted_str), attr.span())?;
-                        // As with `code`, this attribute is only allowed once.
                         quote! {}
                     }
                     other => throw_span_err!(
@@ -317,7 +322,20 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
             self.kind = Some((kind, span));
             Ok(())
         } else {
-            throw_span_err!(span.unwrap(), "`code` specified multiple times");
+            let kind_str = |kind: &DiagnosticId| match kind {
+                DiagnosticId::Lint(..) => "lint",
+                DiagnosticId::Error(..) => "error",
+            };
+
+            let existing_kind = kind_str(&self.kind.as_ref().unwrap().0);
+            let this_kind = kind_str(&kind);
+
+            let msg = if this_kind == existing_kind {
+                format!("`{}` specified multiple times", existing_kind)
+            } else {
+                format!("`{}` specified when `{}` was already specified", this_kind, existing_kind)
+            };
+            throw_span_err!(span.unwrap(), &msg);
         }
     }
 
@@ -366,7 +384,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
             syn::Meta::NameValue(syn::MetaNameValue { lit: syn::Lit::Str(s), .. }) => {
                 let formatted_str = self.build_format(&s.value(), attr.span());
                 match name {
-                    "error" => {
+                    "message" => {
                         if type_matches_path(&info.ty, &["rustc_span", "Span"]) {
                             quote! {
                                 #diag.set_span(*#field_binding);
@@ -377,7 +395,7 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                 #diag.set_primary_message(#formatted_str);
                             }
                         }
-                    }
+                    },
                     "label" => {
                         if type_matches_path(&info.ty, &["rustc_span", "Span"]) {
                             quote! {

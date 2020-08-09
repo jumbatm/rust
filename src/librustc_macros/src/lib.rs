@@ -40,7 +40,8 @@ decl_derive!([TypeFoldable, attributes(type_foldable)] => type_foldable::type_fo
 decl_derive!([Lift, attributes(lift)] => lift::lift_derive);
 decl_derive!(
     [SessionDiagnostic, attributes(
-        code,
+        message,
+        lint,
         error,
         label,
         suggestion,
