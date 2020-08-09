@@ -391,11 +391,12 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                                 #diag.set_primary_message(#formatted_str);
                             }
                         } else {
-                            quote! {
-                                #diag.set_primary_message(#formatted_str);
-                            }
+                            throw_span_err!(
+                                attr.span().unwrap(),
+                                "the `#[message = \"...\"]` attribute can only be applied to fields of type Span"
+                            );
                         }
-                    },
+                    }
                     "label" => {
                         if type_matches_path(&info.ty, &["rustc_span", "Span"]) {
                             quote! {

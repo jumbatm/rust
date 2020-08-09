@@ -91,9 +91,17 @@ struct ErrorWithField {
 
 #[derive(SessionDiagnostic)]
 #[error = "E0123"]
+struct ErrorWithMessageAppliedToField {
+    #[message = "this message is applied to a String field"]
+    //~^ ERROR the `#[message = "..."]` attribute can only be applied to fields of type Span
+    name: String,
+}
+
+#[derive(SessionDiagnostic)]
+#[error = "E0123"]
+#[message = "This error has a field, and references {name}"]
+//~^ ERROR `name` doesn't refer to a field on this type
 struct ErrorWithNonexistentField {
-    #[message = "This error has a field, and references {name}"]
-    //~^ ERROR `name` doesn't refer to a field on this type
     span: Span
 }
 
