@@ -835,7 +835,7 @@ fn convert_variant(
             let dup_span = seen_fields.get(&f.ident.normalize_to_macros_2_0()).cloned();
             if let Some(prev_span) = dup_span {
                 tcx.sess.emit_err(errors::FieldAlreadyDeclared {
-                    field_name: f.ident.to_string(),
+                    field_name: f.ident,
                     span: f.span,
                     prev_span,
                 });
