@@ -1,6 +1,6 @@
 #![deny(unused_must_use)]
 use quote::format_ident;
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 use proc_macro::Diagnostic;
 use syn::spanned::Spanned;
@@ -115,7 +115,9 @@ fn span_err(span: impl proc_macro::MultiSpan, msg: &str) -> proc_macro::Diagnost
 /// span $span with msg $msg (and, optionally, perform additional decoration using the FnOnce
 /// passed in `diag`). Then, return Err(ErrorHandled).
 macro_rules! throw_span_err {
-    ($span:expr, $msg:expr) => {{ throw_span_err!($span, $msg, |diag| diag) }};
+    ($span:expr, $msg:expr) => {{
+        throw_span_err!($span, $msg, |diag| diag)
+    }};
     ($span:expr, $msg:expr, $f:expr) => {{
         return Err(_throw_span_err($span, $msg, $f));
     }};
@@ -383,30 +385,17 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
         Ok(match meta {
             syn::Meta::NameValue(syn::MetaNameValue { lit: syn::Lit::Str(s), .. }) => {
                 let formatted_str = self.build_format(&s.value(), attr.span());
+                let span = *info.span;
                 match name {
                     "message" => {
-                        if type_matches_path(&info.ty, &["rustc_span", "Span"]) {
-                            quote! {
-                                #diag.set_span(*#field_binding);
-                                #diag.set_primary_message(#formatted_str);
-                            }
-                        } else {
-                            throw_span_err!(
-                                attr.span().unwrap(),
-                                "the `#[message = \"...\"]` attribute can only be applied to fields of type Span"
-                            );
+                        quote_spanned! { span=>
+                            #diag.set_span(*#field_binding);
+                            #diag.set_primary_message(#formatted_str);
                         }
                     }
                     "label" => {
-                        if type_matches_path(&info.ty, &["rustc_span", "Span"]) {
-                            quote! {
-                                #diag.span_label(*#field_binding, #formatted_str);
-                            }
-                        } else {
-                            throw_span_err!(
-                                attr.span().unwrap(),
-                                "The `#[label = ...]` attribute can only be applied to fields of type Span"
-                            );
+                        quote_spanned! { span=>
+                            #diag.span_label(*#field_binding, #formatted_str);
                         }
                     }
                     other => throw_span_err!(
