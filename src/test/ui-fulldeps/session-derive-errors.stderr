@@ -99,37 +99,110 @@ LL |     #[suggestion(code = "This is suggested code")]
    |
    = help: provide a suggestion message using #[suggestion(message = "...")]
 
-error: wrong field type for suggestion
-  --> $DIR/session-derive-errors.rs:194:5
-   |
-LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
-LL | |
-LL | |     suggestion: Applicability,
-   | |_____________________________^
-   |
-   = help: #[suggestion(...)] should be applied to fields of type Span or (Span, Applicability)
-
-error: type of field annotated with `#[suggestion(...)]` contains more than one Span
-  --> $DIR/session-derive-errors.rs:209:5
-   |
-LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
-LL | |
-LL | |     suggestion: (Span, Span, Applicability),
-   | |___________________________________________^
-
-error: type of field annotated with `#[suggestion(...)]` contains more than one Applicability
-  --> $DIR/session-derive-errors.rs:217:5
-   |
-LL | /     #[suggestion(message = "This is a message", code = "This is suggested code")]
-LL | |
-LL | |     suggestion: (Applicability, Applicability, Span),
-   | |____________________________________________________^
-
 error: invalid annotation list `#[label(...)]`
   --> $DIR/session-derive-errors.rs:225:7
    |
 LL |     #[label("wrong kind of annotation for label")]
    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: aborting due to 18 previous errors
+error[E0277]: the trait bound `&(rustc_span::Span, rustc_errors::Applicability): rustc_session::session_diagnostic_traits::SpanAndApplicability` is not satisfied
+  --> $DIR/session-derive-errors.rs:143:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^ the trait `rustc_session::session_diagnostic_traits::SpanAndApplicability` is not implemented for `&(rustc_span::Span, rustc_errors::Applicability)`
+   |
+   = help: the following implementations were found:
+             <(rustc_errors::Applicability, rustc_span::Span) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+             <(rustc_span::Span, rustc_errors::Applicability) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+   = note: required by `rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
+error[E0277]: the trait bound `&(rustc_span::Span, rustc_errors::Applicability): rustc_session::session_diagnostic_traits::SpanAndApplicability` is not satisfied
+  --> $DIR/session-derive-errors.rs:153:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^ the trait `rustc_session::session_diagnostic_traits::SpanAndApplicability` is not implemented for `&(rustc_span::Span, rustc_errors::Applicability)`
+   |
+   = help: the following implementations were found:
+             <(rustc_errors::Applicability, rustc_span::Span) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+             <(rustc_span::Span, rustc_errors::Applicability) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+   = note: required by `rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `&(rustc_errors::Applicability, rustc_span::Span): rustc_session::session_diagnostic_traits::SpanAndApplicability` is not satisfied
+  --> $DIR/session-derive-errors.rs:184:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^ the trait `rustc_session::session_diagnostic_traits::SpanAndApplicability` is not implemented for `&(rustc_errors::Applicability, rustc_span::Span)`
+   |
+   = help: the following implementations were found:
+             <(rustc_errors::Applicability, rustc_span::Span) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+             <(rustc_span::Span, rustc_errors::Applicability) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+   = note: required by `rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `&rustc_errors::Applicability: rustc_session::session_diagnostic_traits::SpanAndApplicability` is not satisfied
+  --> $DIR/session-derive-errors.rs:191:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^ the trait `rustc_session::session_diagnostic_traits::SpanAndApplicability` is not implemented for `&rustc_errors::Applicability`
+   |
+   = note: required by `rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `&rustc_span::Span: rustc_session::session_diagnostic_traits::SpanAndApplicability` is not satisfied
+  --> $DIR/session-derive-errors.rs:199:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^ the trait `rustc_session::session_diagnostic_traits::SpanAndApplicability` is not implemented for `&rustc_span::Span`
+   |
+   = help: the following implementations were found:
+             <rustc_span::Span as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+   = note: required by `rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `&(rustc_span::Span, rustc_span::Span, rustc_errors::Applicability): rustc_session::session_diagnostic_traits::SpanAndApplicability` is not satisfied
+  --> $DIR/session-derive-errors.rs:206:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^ the trait `rustc_session::session_diagnostic_traits::SpanAndApplicability` is not implemented for `&(rustc_span::Span, rustc_span::Span, rustc_errors::Applicability)`
+   |
+   = note: required by `rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `&(rustc_errors::Applicability, rustc_errors::Applicability, rustc_span::Span): rustc_session::session_diagnostic_traits::SpanAndApplicability` is not satisfied
+  --> $DIR/session-derive-errors.rs:214:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^ the trait `rustc_session::session_diagnostic_traits::SpanAndApplicability` is not implemented for `&(rustc_errors::Applicability, rustc_errors::Applicability, rustc_span::Span)`
+   |
+   = note: required by `rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `&(rustc_span::Span, rustc_errors::Applicability): rustc_session::session_diagnostic_traits::SpanAndApplicability` is not satisfied
+  --> $DIR/session-derive-errors.rs:230:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^ the trait `rustc_session::session_diagnostic_traits::SpanAndApplicability` is not implemented for `&(rustc_span::Span, rustc_errors::Applicability)`
+   |
+   = help: the following implementations were found:
+             <(rustc_errors::Applicability, rustc_span::Span) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+             <(rustc_span::Span, rustc_errors::Applicability) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+   = note: required by `rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `&(rustc_span::Span, rustc_errors::Applicability): rustc_session::session_diagnostic_traits::SpanAndApplicability` is not satisfied
+  --> $DIR/session-derive-errors.rs:240:10
+   |
+LL | #[derive(SessionDiagnostic)]
+   |          ^^^^^^^^^^^^^^^^^ the trait `rustc_session::session_diagnostic_traits::SpanAndApplicability` is not implemented for `&(rustc_span::Span, rustc_errors::Applicability)`
+   |
+   = help: the following implementations were found:
+             <(rustc_errors::Applicability, rustc_span::Span) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+             <(rustc_span::Span, rustc_errors::Applicability) as rustc_session::session_diagnostic_traits::SpanAndApplicability>
+   = note: required by `rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span`
+   = note: this error originates in a derive macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: aborting due to 24 previous errors
+
+For more information about this error, try `rustc --explain E0277`.

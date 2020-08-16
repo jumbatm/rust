@@ -25,4 +25,6 @@ pub use session::*;
 
 pub mod output;
 
+pub mod session_diagnostic_traits;
+
 pub use getopts;

@@ -1,6 +1,6 @@
 #![deny(unused_must_use)]
 use quote::format_ident;
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 use proc_macro::Diagnostic;
 use syn::spanned::Spanned;
@@ -424,73 +424,6 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                     | suggestion_kind @ "suggestion_short"
                     | suggestion_kind @ "suggestion_hidden"
                     | suggestion_kind @ "suggestion_verbose" => {
-                        // For suggest, we need to ensure we are running on a (Span,
-                        // Applicability) pair.
-                        let (span, applicability) = (|| match &info.ty {
-                            ty @ syn::Type::Path(..)
-                                if type_matches_path(ty, &["rustc_span", "Span"]) =>
-                            {
-                                let binding = &info.binding.binding;
-                                Ok((
-                                    quote!(*#binding),
-                                    quote!(rustc_errors::Applicability::Unspecified),
-                                ))
-                            }
-                            syn::Type::Tuple(tup) => {
-                                let mut span_idx = None;
-                                let mut applicability_idx = None;
-                                for (idx, elem) in tup.elems.iter().enumerate() {
-                                    if type_matches_path(elem, &["rustc_span", "Span"]) {
-                                        if span_idx.is_none() {
-                                            span_idx = Some(syn::Index::from(idx));
-                                        } else {
-                                            throw_span_err!(
-                                                info.span.clone().unwrap(),
-                                                "type of field annotated with `#[suggestion(...)]` contains more than one Span"
-                                            );
-                                        }
-                                    } else if type_matches_path(
-                                        elem,
-                                        &["rustc_errors", "Applicability"],
-                                    ) {
-                                        if applicability_idx.is_none() {
-                                            applicability_idx = Some(syn::Index::from(idx));
-                                        } else {
-                                            throw_span_err!(
-                                                info.span.clone().unwrap(),
-                                                "type of field annotated with `#[suggestion(...)]` contains more than one Applicability"
-                                            );
-                                        }
-                                    }
-                                }
-                                if let Some(span_idx) = span_idx {
-                                    let binding = &info.binding.binding;
-                                    let span = quote!(#binding.#span_idx);
-                                    let applicability = applicability_idx
-                                        .map(
-                                            |applicability_idx| quote!(#binding.#applicability_idx),
-                                        )
-                                        .unwrap_or(quote!(
-                                            rustc_errors::Applicability::Unspecified
-                                        ));
-                                    return Ok((span, applicability));
-                                }
-                                throw_span_err!(
-                                    info.span.clone().unwrap(),
-                                    "wrong types for suggestion",
-                                    |diag| {
-                                        diag.help("#[suggestion(...)] on a tuple field must be applied to fields of type (Span, Applicability)")
-                                    }
-                                );
-                            }
-                            _ => throw_span_err!(
-                                info.span.clone().unwrap(),
-                                "wrong field type for suggestion",
-                                |diag| {
-                                    diag.help("#[suggestion(...)] should be applied to fields of type Span or (Span, Applicability)")
-                                }
-                            ),
-                        })()?;
                         // Now read the key-value pairs.
                         let mut msg = None;
                         let mut code = None;
@@ -541,9 +474,13 @@ impl<'a> SessionDiagnosticDeriveBuilder<'a> {
                         };
                         let code = code.unwrap_or_else(|| quote! { String::new() });
                         // Now build it out:
+                        let binding = &info.binding.binding;
                         let suggestion_method = format_ident!("span_{}", suggestion_kind);
-                        quote! {
-                            #diag.#suggestion_method(#span, #msg, #code, #applicability);
+                        let span = info.binding.ast().ty.span();
+                        quote_spanned! { span=>
+                            let __span = rustc_session::session_diagnostic_traits::SpanAndApplicability::get_span(&#binding);
+                            let __applicability = rustc_session::session_diagnostic_traits::SpanAndApplicability::get_applicability(&#binding);
+                            #diag.#suggestion_method(__span, #msg, #code, __applicability);
                         }
                     }
                     other => throw_span_err!(
