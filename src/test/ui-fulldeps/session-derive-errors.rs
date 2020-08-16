@@ -93,8 +93,7 @@ struct ErrorWithField {
 #[error = "E0123"]
 struct ErrorWithMessageAppliedToField {
     #[message = "this message is applied to a String field"]
-    //~^ ERROR the `#[message = "..."]` attribute can only be applied to fields of type Span
-    name: String,
+    name: String, //~ ERROR the trait bound
 }
 
 #[derive(SessionDiagnostic)]
@@ -136,8 +135,7 @@ struct LabelOnSpan {
 #[message = "Something something"]
 struct LabelOnNonSpan {
     #[label = "See here"]
-    //~^ ERROR The `#[label = ...]` attribute can only be applied to fields of type Span
-    id: u32,
+    id: u32, //~ ERROR mismatched types
 }
 
 #[derive(SessionDiagnostic)]
