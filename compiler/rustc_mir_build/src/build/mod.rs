@@ -105,6 +105,7 @@ fn mir_build(tcx: TyCtxt<'_>, def: ty::WithOptConstParam<LocalDefId>) -> Body<'_
             };
 
             let body = tcx.hir().body(body_id);
+            debug!("body.value: {:#?}", &body.value);
             let thir = build_thir(tcx, def, &arena, &body.value);
             let ty = tcx.type_of(fn_def_id);
             let mut abi = fn_sig.abi;
