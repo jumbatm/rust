@@ -153,6 +153,7 @@ impl<'cx, 'tcx> Visitor<'tcx> for InvalidationGenerator<'cx, 'tcx> {
                 destination,
                 cleanup: _,
                 from_hir_call: _,
+                generic_trampolined_impl: _,
                 fn_span: _,
             } => {
                 self.consume_operand(location, func);

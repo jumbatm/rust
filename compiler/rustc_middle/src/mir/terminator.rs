@@ -187,6 +187,9 @@ pub enum TerminatorKind<'tcx> {
         /// `true` if this is from a call in HIR rather than from an overloaded
         /// operator. True for overloaded function call.
         from_hir_call: bool,
+        /// `true` if this call should resolve to the generic trampoline body. This should only
+        /// ever be the case if the caller is the generic "head" of the function.
+        generic_trampolined_impl: bool,
         /// This `Span` is the span of the function, without the dot and receiver
         /// (e.g. `foo(a, b)` in `x.foo(a, b)`
         fn_span: Span,

@@ -82,7 +82,9 @@ crate fn mir_callgraph_reachable(
                 | InstanceDef::ReifyShim(_)
                 | InstanceDef::FnPtrShim(..)
                 | InstanceDef::ClosureOnceShim { .. }
-                | InstanceDef::CloneShim(..) => {}
+                | InstanceDef::CloneShim(..)
+                // FIXME(jumbatm): Shouldn't GenericTrampolineBodyShim get inlined, like DropGlue?
+                | InstanceDef::GenericTrampolineBodyShim { .. } => {}
                 InstanceDef::DropGlue(..) => {
                     // FIXME: A not fully substituted drop shim can cause ICEs if one attempts to
                     // have its MIR built. Likely oli-obk just screwed up the `ParamEnv`s, so this

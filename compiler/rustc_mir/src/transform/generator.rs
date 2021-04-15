@@ -1470,6 +1470,7 @@ impl Visitor<'tcx> for EnsureGeneratorFieldAssignmentsNeverAlias<'_> {
                 destination: Some((dest, _)),
                 cleanup: _,
                 from_hir_call: _,
+                generic_trampolined_impl: _,
                 fn_span: _,
             } => {
                 self.check_assigned_place(*dest, |this| {

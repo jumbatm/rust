@@ -310,6 +310,7 @@ fn check_terminator(
             func,
             args,
             from_hir_call: _,
+            generic_trampolined_impl: _,
             destination: _,
             cleanup: _,
             fn_span: _,

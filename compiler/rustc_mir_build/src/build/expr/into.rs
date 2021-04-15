@@ -232,6 +232,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                             Some((destination, success))
                         },
                         from_hir_call,
+                        generic_trampolined_impl: false,
                         fn_span,
                     },
                 );

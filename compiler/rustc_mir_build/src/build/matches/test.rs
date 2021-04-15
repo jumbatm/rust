@@ -444,6 +444,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 destination: Some((eq_result, eq_block)),
                 cleanup: None,
                 from_hir_call: false,
+                generic_trampolined_impl: false,
                 fn_span: source_info.span,
             },
         );

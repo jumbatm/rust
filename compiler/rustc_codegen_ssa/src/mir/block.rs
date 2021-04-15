@@ -973,6 +973,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 ref destination,
                 cleanup,
                 from_hir_call: _,
+                // FIXME(jumbatm): Maybe use flag here?
+                generic_trampolined_impl: _,
                 fn_span,
             } => {
                 self.codegen_call_terminator(

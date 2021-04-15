@@ -820,6 +820,7 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
                             args,
                             cleanup: None,
                             destination: Some((Place::from(new_temp), new_target)),
+                            generic_trampolined_impl: false,
                             from_hir_call,
                             fn_span,
                         },

@@ -65,7 +65,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
                 self.go_to_block(target_block);
             }
 
-            Call { ref func, ref args, destination, ref cleanup, from_hir_call: _, fn_span: _ } => {
+            Call { ref func, ref args, destination, ref cleanup, from_hir_call: _, generic_trampolined_impl: _, fn_span: _ } => {
                 let old_stack = self.frame_idx();
                 let old_loc = self.frame().loc;
                 let func = self.eval_operand(func, None)?;
@@ -297,7 +297,8 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             | ty::InstanceDef::FnPtrShim(..)
             | ty::InstanceDef::DropGlue(..)
             | ty::InstanceDef::CloneShim(..)
-            | ty::InstanceDef::Item(_) => {
+            | ty::InstanceDef::Item(_)
+            | ty::InstanceDef::GenericTrampolineBodyShim { .. } => {
                 // We need MIR for this fn
                 let body =
                     match M::find_mir_or_eval_fn(self, instance, caller_abi, args, ret, unwind)? {

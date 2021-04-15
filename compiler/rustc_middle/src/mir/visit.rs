@@ -349,7 +349,8 @@ macro_rules! make_mir_visitor {
                         ty::InstanceDef::ReifyShim(_def_id) |
                         ty::InstanceDef::Virtual(_def_id, _) |
                         ty::InstanceDef::ClosureOnceShim { call_once: _def_id } |
-                        ty::InstanceDef::DropGlue(_def_id, None) => {}
+                        ty::InstanceDef::DropGlue(_def_id, None) |
+                        ty::InstanceDef::GenericTrampolineBodyShim { callee_def_id: _def_id } => {}
 
                         ty::InstanceDef::FnPtrShim(_def_id, ty) |
                         ty::InstanceDef::DropGlue(_def_id, Some(ty)) |
@@ -535,6 +536,7 @@ macro_rules! make_mir_visitor {
                         destination,
                         cleanup: _,
                         from_hir_call: _,
+                        generic_trampolined_impl: _,
                         fn_span: _
                     } => {
                         self.visit_operand(func, location);
