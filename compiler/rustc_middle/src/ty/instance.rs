@@ -93,6 +93,10 @@ pub enum InstanceDef<'tcx> {
     ///
     /// The `DefId` is for `Clone::clone`, the `Ty` is the type `T` with the builtin `Clone` impl.
     CloneShim(DefId, Ty<'tcx>),
+
+    /// A generic trampoline: that is, type-conversion code inlined into the caller to reduce the
+    /// number of full monomorphizations for some generic function (pointed-to the DefId).
+    GenericTrampolineShim { callee_def_id: DefId },
 }
 
 impl<'tcx> Instance<'tcx> {
@@ -149,6 +153,7 @@ impl<'tcx> InstanceDef<'tcx> {
             | InstanceDef::ClosureOnceShim { call_once: def_id }
             | InstanceDef::DropGlue(def_id, _)
             | InstanceDef::CloneShim(def_id, _) => def_id,
+            | InstanceDef::GenericTrampolineShim { callee_def_id } => callee_def_id,
         }
     }
 
@@ -163,7 +168,8 @@ impl<'tcx> InstanceDef<'tcx> {
             | InstanceDef::Intrinsic(def_id)
             | InstanceDef::ClosureOnceShim { call_once: def_id }
             | InstanceDef::DropGlue(def_id, _)
-            | InstanceDef::CloneShim(def_id, _) => ty::WithOptConstParam::unknown(def_id),
+            | InstanceDef::CloneShim(def_id, _)
+            | InstanceDef::GenericTrampolineShim { callee_def_id: def_id } => ty::WithOptConstParam::unknown(def_id),
         }
     }
 
@@ -252,6 +258,8 @@ impl<'tcx> InstanceDef<'tcx> {
             | InstanceDef::ReifyShim(..)
             | InstanceDef::Virtual(..)
             | InstanceDef::VtableShim(..) => true,
+            // FIXME(jumbatm): To fill in once generating MIR bodies.
+            | InstanceDef::GenericTrampolineShim { .. } => todo!(),
         }
     }
 }
@@ -276,6 +284,7 @@ impl<'tcx> fmt::Display for Instance<'tcx> {
             InstanceDef::DropGlue(_, None) => write!(f, " - shim(None)"),
             InstanceDef::DropGlue(_, Some(ty)) => write!(f, " - shim(Some({}))", ty),
             InstanceDef::CloneShim(_, ty) => write!(f, " - shim({})", ty),
+            InstanceDef::GenericTrampolineShim { callee_def_id } => write!(f, " - shim(generic_trampoline for {:?})", callee_def_id)
         }
     }
 }

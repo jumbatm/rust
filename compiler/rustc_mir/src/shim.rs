@@ -66,6 +66,7 @@ fn make_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceDef<'tcx>) -> Body<'
         }
         ty::InstanceDef::DropGlue(def_id, ty) => build_drop_shim(tcx, def_id, ty),
         ty::InstanceDef::CloneShim(def_id, ty) => build_clone_shim(tcx, def_id, ty),
+        ty::InstanceDef::GenericTrampolineShim { .. } => build_generic_trampoline_shim(),
         ty::InstanceDef::Virtual(..) => {
             bug!("InstanceDef::Virtual ({:?}) is for direct calls only", instance)
         }
@@ -317,6 +318,10 @@ fn build_clone_shim<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId, self_ty: Ty<'tcx>) -
     };
 
     builder.into_mir()
+}
+
+fn build_generic_trampoline_shim() -> Body<'tcx> {
+    todo!()
 }
 
 struct CloneShimBuilder<'tcx> {

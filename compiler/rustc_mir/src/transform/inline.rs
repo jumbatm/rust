@@ -196,7 +196,9 @@ impl Inliner<'tcx> {
             | InstanceDef::FnPtrShim(..)
             | InstanceDef::ClosureOnceShim { .. }
             | InstanceDef::DropGlue(..)
-            | InstanceDef::CloneShim(..) => return Ok(()),
+            | InstanceDef::CloneShim(..)
+            // FIXME(jumbatm): Perhaps should be check_mir_is_available(calle_def_id)?
+            | InstanceDef::GenericTrampolineShim { .. } => return Ok(()),
         }
 
         if self.tcx.is_constructor(callee.def_id()) {
