@@ -1794,7 +1794,7 @@ impl<'tcx> TyCtxt<'tcx> {
             | ty::InstanceDef::ClosureOnceShim { .. }
             | ty::InstanceDef::DropGlue(..)
             | ty::InstanceDef::CloneShim(..)
-            | ty::InstanceDef::GenericTrampolineShim { .. } => self.mir_shims(instance),
+            | ty::InstanceDef::GenericTrampolineBodyShim { .. } => self.mir_shims(instance),
         }
     }
 

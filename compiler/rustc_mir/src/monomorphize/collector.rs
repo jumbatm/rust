@@ -880,7 +880,7 @@ fn visit_instance_use<'tcx>(
         | ty::InstanceDef::Item(..)
         | ty::InstanceDef::FnPtrShim(..)
         | ty::InstanceDef::CloneShim(..)
-        | ty::InstanceDef::GenericTrampolineShim { .. } => {
+        | ty::InstanceDef::GenericTrampolineBodyShim { .. } => {
             output.push(create_fn_mono_item(tcx, instance, source));
         }
     }
@@ -902,7 +902,7 @@ fn should_codegen_locally<'tcx>(tcx: TyCtxt<'tcx>, instance: &Instance<'tcx>) ->
         | ty::InstanceDef::Intrinsic(_)
         | ty::InstanceDef::CloneShim(..)
         // FIXME(jumbatm): share across crates?
-        | ty::InstanceDef::GenericTrampolineShim { .. } => return true,
+        | ty::InstanceDef::GenericTrampolineBodyShim { .. } => return true,
     };
 
     if tcx.is_foreign_item(def_id) {

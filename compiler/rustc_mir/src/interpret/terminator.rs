@@ -267,7 +267,7 @@ impl<'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> InterpCx<'mir, 'tcx, M> {
             | ty::InstanceDef::DropGlue(..)
             | ty::InstanceDef::CloneShim(..)
             | ty::InstanceDef::Item(_)
-            | ty::InstanceDef::GenericTrampolineShim { .. } => {
+            | ty::InstanceDef::GenericTrampolineBodyShim { .. } => {
                 // We need MIR for this fn
                 let body =
                     match M::find_mir_or_eval_fn(self, instance, caller_abi, args, ret, unwind)? {

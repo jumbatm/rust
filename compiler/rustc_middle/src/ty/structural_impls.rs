@@ -640,8 +640,8 @@ impl<'a, 'tcx> Lift<'tcx> for ty::InstanceDef<'a> {
             ty::InstanceDef::CloneShim(def_id, ty) => {
                 Some(ty::InstanceDef::CloneShim(def_id, tcx.lift(ty)?))
             }
-            ty::InstanceDef::GenericTrampolineShim { callee_def_id } => {
-                Some(ty::InstanceDef::GenericTrampolineShim { callee_def_id })
+            ty::InstanceDef::GenericTrampolineBodyShim { callee_def_id } => {
+                Some(ty::InstanceDef::GenericTrampolineBodyShim { callee_def_id })
             }
         }
     }
@@ -825,7 +825,7 @@ impl<'tcx> TypeFoldable<'tcx> for ty::instance::Instance<'tcx> {
                 }
                 DropGlue(did, ty) => DropGlue(did.fold_with(folder), ty.fold_with(folder)),
                 CloneShim(did, ty) => CloneShim(did.fold_with(folder), ty.fold_with(folder)),
-                GenericTrampolineShim { callee_def_id } => GenericTrampolineShim { callee_def_id: callee_def_id.fold_with(folder) }
+                GenericTrampolineBodyShim { callee_def_id } => GenericTrampolineBodyShim { callee_def_id: callee_def_id.fold_with(folder) }
             },
         }
     }
@@ -835,7 +835,7 @@ impl<'tcx> TypeFoldable<'tcx> for ty::instance::Instance<'tcx> {
         self.substs.visit_with(visitor)?;
         match self.def {
             Item(def) => def.visit_with(visitor),
-            VtableShim(did) | ReifyShim(did) | Intrinsic(did) | Virtual(did, _) | GenericTrampolineShim { callee_def_id: did } => {
+            VtableShim(did) | ReifyShim(did) | Intrinsic(did) | Virtual(did, _) | GenericTrampolineBodyShim { callee_def_id: did } => {
                 did.visit_with(visitor)
             }
             FnPtrShim(did, ty) | CloneShim(did, ty) => {
