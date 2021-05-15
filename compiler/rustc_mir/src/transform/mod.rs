@@ -33,6 +33,7 @@ pub mod early_otherwise_branch;
 pub mod elaborate_drops;
 pub mod function_item_references;
 pub mod generator;
+pub mod generic_trampoline;
 pub mod inline;
 pub mod instcombine;
 pub mod lower_intrinsics;
