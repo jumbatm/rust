@@ -38,6 +38,7 @@ impl<'a, 'tcx> Visitor<'tcx> for FunctionItemRefChecker<'a, 'tcx> {
             destination: _,
             cleanup: _,
             from_hir_call: _,
+            generic_trampolined_impl: _,
             fn_span: _,
         } = &terminator.kind
         {

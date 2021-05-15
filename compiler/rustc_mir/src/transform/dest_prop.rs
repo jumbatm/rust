@@ -627,6 +627,7 @@ impl Conflicts<'a> {
                 destination: Some((dest_place, _)),
                 cleanup: _,
                 from_hir_call: _,
+                generic_trampolined_impl: _,
                 fn_span: _,
             } => {
                 // No arguments may overlap with the destination.

@@ -634,6 +634,7 @@ where
                     destination: Some((unit_temp, succ)),
                     cleanup: unwind.into_option(),
                     from_hir_call: true,
+                    generic_trampolined_impl: false,
                     fn_span: self.source_info.span,
                 },
                 source_info: self.source_info,
@@ -971,6 +972,7 @@ where
             destination: Some((unit_temp, target)),
             cleanup: None,
             from_hir_call: false,
+            generic_trampolined_impl: false,
             fn_span: self.source_info.span,
         }; // FIXME(#43234)
         let free_block = self.new_block(unwind, call);

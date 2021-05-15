@@ -354,6 +354,7 @@ fn codegen_fn_content(fx: &mut FunctionCx<'_, '_, '_>) {
                 fn_span,
                 cleanup: _,
                 from_hir_call: _,
+                generic_trampolined_impl: _,
             } => {
                 fx.tcx.sess.time("codegen call", || {
                     crate::abi::codegen_terminator_call(fx, *fn_span, func, args, *destination)

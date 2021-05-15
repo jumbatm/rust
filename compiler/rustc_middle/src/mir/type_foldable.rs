@@ -41,7 +41,7 @@ impl<'tcx> TypeFoldable<'tcx> for Terminator<'tcx> {
                 resume_arg: resume_arg.fold_with(folder),
                 drop,
             },
-            Call { func, args, destination, cleanup, from_hir_call, fn_span } => {
+            Call { func, args, destination, cleanup, from_hir_call, generic_trampolined_impl, fn_span } => {
                 let dest = destination.map(|(loc, dest)| (loc.fold_with(folder), dest));
 
                 Call {
@@ -50,6 +50,7 @@ impl<'tcx> TypeFoldable<'tcx> for Terminator<'tcx> {
                     destination: dest,
                     cleanup,
                     from_hir_call,
+                    generic_trampolined_impl,
                     fn_span,
                 }
             }
