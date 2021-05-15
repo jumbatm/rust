@@ -480,7 +480,7 @@ fn locals_live_across_suspend_points(
         dataflow::ResultsCursor::new(body_ref, &requires_storage_results);
 
     // Calculate the liveness of MIR locals ignoring borrows.
-    let mut liveness = MaybeLiveLocals
+    let mut liveness = MaybeLiveLocals { drop_is_use: true }
         .into_engine(tcx, body_ref)
         .pass_name("generator")
         .iterate_to_fixpoint()
