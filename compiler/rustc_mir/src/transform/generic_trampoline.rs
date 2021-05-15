@@ -36,3 +36,39 @@
 //! where the function becomes non-generic. It then splits the function at that point, putting
 //! everything after the pinch point into a different Body and replacing it with a call to an impl
 //! function.
+
+use crate::dataflow::impls::MaybeLiveLocals;
+use crate::dataflow::Analysis;
+use crate::{
+    dataflow::{AnalysisDomain, ResultsVisitor},
+    transform::MirPass,
+};
+
+use rustc_middle::mir::Body;
+use rustc_middle::ty::TyCtxt;
+
+pub struct GenericTrampoliner;
+
+impl MirPass<'tcx> for GenericTrampoliner {
+    fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
+        // At every program point, we only want to consider every live local. Unlike a lot of other
+        // use cases, we don't need to consider a local live if a reference to it is live, because
+        // when we synthesise the impl function, we can just pass the live reference in instead.
+        let _liveness_results = MaybeLiveLocals
+            .into_engine(tcx, body)
+            .iterate_to_fixpoint()
+            .visit_with(body, body.basic_blocks().indices(), &mut FindPinchPoint::new());
+    }
+}
+
+struct FindPinchPoint {}
+
+impl FindPinchPoint {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+impl ResultsVisitor<'mir, 'tcx> for FindPinchPoint {
+    type FlowState = <MaybeLiveLocals as AnalysisDomain<'tcx>>::Domain;
+}
