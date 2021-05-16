@@ -14,11 +14,13 @@ use crate::dataflow::{AnalysisDomain, Backward, GenKill, GenKillAnalysis};
 /// [`MaybeBorrowedLocals`]: super::MaybeBorrowedLocals
 /// [flow-test]: https://github.com/rust-lang/rust/blob/a08c47310c7d49cbdc5d7afb38408ba519967ecd/src/test/ui/mir-dataflow/liveness-ptr.rs
 /// [liveness]: https://en.wikipedia.org/wiki/Live_variable_analysis
-pub struct MaybeLiveLocals;
+pub struct MaybeLiveLocals {
+    pub drop_is_use: bool,
+}
 
 impl MaybeLiveLocals {
     fn transfer_function<T>(&self, trans: &'a mut T) -> TransferFunction<'a, T> {
-        TransferFunction(trans)
+        TransferFunction(trans, self.drop_is_use)
     }
 }
 
@@ -84,7 +86,7 @@ impl GenKillAnalysis<'tcx> for MaybeLiveLocals {
     }
 }
 
-struct TransferFunction<'a, T>(&'a mut T);
+struct TransferFunction<'a, T>(&'a mut T, bool);
 
 impl<'tcx, T> Visitor<'tcx> for TransferFunction<'_, T>
 where
@@ -97,7 +99,7 @@ where
         // place with one of the `Projection` variants of `PlaceContext`.
         self.visit_projection(place.as_ref(), context, location);
 
-        match DefUse::for_place(context) {
+        match DefUse::for_place(context, self.1) {
             // Treat derefs as a use of the base local. `*p = 4` is not a def of `p` but a use.
             Some(_) if place.is_indirect() => self.0.gen(local),
 
@@ -111,7 +113,7 @@ where
         // Because we do not call `super_place` above, `visit_local` is only called for locals that
         // do not appear as part of  a `Place` in the MIR. This handles cases like the implicit use
         // of the return place in a `Return` terminator or the index in an `Index` projection.
-        match DefUse::for_place(context) {
+        match DefUse::for_place(context, self.1) {
             Some(DefUse::Def) => self.0.kill(local),
             Some(DefUse::Use) => self.0.gen(local),
             _ => {}
@@ -126,7 +128,7 @@ enum DefUse {
 }
 
 impl DefUse {
-    fn for_place(context: PlaceContext) -> Option<DefUse> {
+    fn for_place(context: PlaceContext, drop_is_use: bool) -> Option<DefUse> {
         match context {
             PlaceContext::NonUse(_) => None,
 
@@ -137,6 +139,8 @@ impl DefUse {
             // only a `Def` when the function returns successfully, we handle this case separately
             // in `call_return_effect` above.
             PlaceContext::MutatingUse(MutatingUseContext::Call | MutatingUseContext::Yield) => None,
+
+            PlaceContext::MutatingUse(MutatingUseContext::Drop) if !drop_is_use => None,
 
             // All other contexts are uses...
             PlaceContext::MutatingUse(

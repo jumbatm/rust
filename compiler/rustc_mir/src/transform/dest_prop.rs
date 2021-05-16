@@ -417,8 +417,10 @@ impl Conflicts<'a> {
             .into_engine(tcx, body)
             .iterate_to_fixpoint()
             .into_results_cursor(body);
-        let mut live =
-            MaybeLiveLocals.into_engine(tcx, body).iterate_to_fixpoint().into_results_cursor(body);
+        let mut live = MaybeLiveLocals { drop_is_use: true }
+            .into_engine(tcx, body)
+            .iterate_to_fixpoint()
+            .into_results_cursor(body);
 
         let mut reachable = None;
         dump_mir(tcx, None, "DestinationPropagation-dataflow", &"", body, |pass_where, w| {
