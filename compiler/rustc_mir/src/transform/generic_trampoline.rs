@@ -52,7 +52,9 @@ use crate::{
     transform::MirPass,
 };
 
+use rustc_data_structures::fx::FxIndexMap;
 use rustc_index::bit_set::BitSet;
+use rustc_middle::mir::BasicBlock;
 use rustc_middle::mir::{self, Body, HasLocalDecls, Location, Statement};
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::ty::TypeFlags;
@@ -79,7 +81,8 @@ impl MirPass<'tcx> for GenericTrampoliner {
 /// so we cache the information we need instead.
 struct AnnotateGenericStatements<'body, 'tcx> {
     body: &'body Body<'tcx>,
-    cache: BitSet<Location>,
+    // Maps (BB -> statement index)
+    block_map: FxIndexMap<BasicBlock, BitSet<usize>>,
 }
 
 impl AnnotateGenericStatements<'body, 'tcx> {
@@ -88,22 +91,20 @@ impl AnnotateGenericStatements<'body, 'tcx> {
         // FIXME: Replace with map (BasicBlock -> StatementIndex). We could just store, for
         // each basic block, where in the basic block the last statement with a live generic
         // is.
-        let num_statements = body
-            .basic_blocks()
-            .iter()
-            .map(|data| data.statements.len() + /*terminator: */ 1)
-            .fold(0, |acc, elem| acc + elem);
-
         Self {
             body,
-            cache: BitSet::new_empty(num_statements),
+            block_map: FxIndexMap::default(),
         }
     }
+
     fn has_live_generic(&self, location: &Location) -> bool {
-        self.cache.contains(location)
+        debug_assert!(self.block_map.contains_key(&location.block));
+        self.block_map[&location.block].contains(location.statement_index)
     }
+
     fn mark_has_live_generic(&mut self, location: &Location) {
-        self.cache.insert(location)
+        debug_assert!(self.block_map.contains_key(&location.block));
+        self.block_map[&location.block].insert(location.statement_index);
     }
 
     fn check_for_pinch_point(
@@ -166,5 +167,14 @@ impl ResultsVisitor<'mir, 'tcx> for AnnotateGenericStatements<'body, 'tcx> {
             state
         );
         self.check_for_pinch_point(state, location)
+    }
+
+    fn visit_block_end(
+        &mut self,
+        _state: &Self::FlowState,
+        block_data: &'mir mir::BasicBlockData<'tcx>,
+        block: BasicBlock,
+    ) {
+        self.block_map.insert(block, BitSet::new_empty(block_data.statements.len()+/*terminator:*/1));
     }
 }
