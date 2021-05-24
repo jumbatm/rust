@@ -44,6 +44,7 @@ use crate::{
     transform::MirPass,
 };
 
+use rustc_index::bit_set::BitSet;
 use rustc_middle::mir::Body;
 use rustc_middle::ty::TyCtxt;
 
@@ -51,24 +52,68 @@ pub struct GenericTrampoliner;
 
 impl MirPass<'tcx> for GenericTrampoliner {
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
+        // Count the number of statements in this body.
+        let num_statements = body
+            .basic_blocks()
+            .iter()
+            .map(|data| data.statements.len() + /*terminator: */ 1)
+            .fold(0, |acc, elem| acc += elem);
+
         // At every program point, we only want to consider every live local. Unlike a lot of other
         // use cases, we don't need to consider a local live if a reference to it is live, because
         // when we synthesise the impl function, we can just pass the live reference in instead.
         let _liveness_results = MaybeLiveLocals
             .into_engine(tcx, body)
             .iterate_to_fixpoint()
-            .visit_with(body, body.basic_blocks().indices(), &mut FindPinchPoint::new());
+            .visit_with(body, body.basic_blocks().indices(), &mut AnnotateGenericStatements::new(body));
     }
 }
 
-struct FindPinchPoint {}
+/// A visitor which, based on liveness results, annotates each statement with whether or not, at a
+/// particular program point P, there are any live generic values.
+///
+/// We need this information for a forward analysis we perform later on. Seeking a cursor over
+/// liveness results would be slow, because seeking in the wrong direction is a O(n^2) operation,
+/// so we cache the information we need instead.
+struct AnnotateGenericStatements<'body, 'tcx> {
+    body: &'body Body<'tcx>,
+    cache: BitSet<Location>,
+}
 
-impl FindPinchPoint {
-    fn new() -> Self {
-        Self {}
+impl AnnotateGenericStatements<'body, 'tcx> {
+    fn new(body: &'body Body<'tcx>) -> Self {
+        Self {
+            // FIXME: Replace with map (BasicBlock -> StatementIndex). We could just store, for
+            // each basic block, where in the basic block the last statement with a live generic
+            // is.
+            body,
+            cache: BitSet::new_empty(num_statements),
+        }
+    }
+    fn has_live_generic(&self, location: &Location) -> bool {
+        self.cache.contains(location)
+    }
+    fn mark_has_live_generic(&mut self, location: &Location) {
+        self.cache.insert(location)
     }
 }
 
-impl ResultsVisitor<'mir, 'tcx> for FindPinchPoint {
+impl ResultsVisitor<'mir, 'tcx> for AnnotateGenericStatements<'body, 'tcx> {
     type FlowState = <MaybeLiveLocals as AnalysisDomain<'tcx>>::Domain;
+
+    fn visit_statement_after_primary_effect(
+        &mut self,
+        _state: &Self::FlowState,
+        _statement: &'mir rustc_middle::mir::Statement<'tcx>,
+        _location: rustc_middle::mir::Location,
+    ) {
+    }
+
+    fn visit_terminator_after_primary_effect(
+        &mut self,
+        _state: &Self::FlowState,
+        _terminator: &'mir rustc_middle::mir::Terminator<'tcx>,
+        _location: rustc_middle::mir::Location,
+    ) {
+    }
 }
