@@ -45,8 +45,11 @@
 //! function doesn't have to go to exit (ie, [P, P+n]), but that makes the analysis much more
 //! complex, and it's not clear that would give any benefit in real codebases.
 
+use crate::dataflow::fmt::DebugWithContext;
 use crate::dataflow::impls::MaybeLiveLocals;
 use crate::dataflow::Analysis;
+use crate::dataflow::Forward;
+use crate::dataflow::JoinSemiLattice;
 use crate::{
     dataflow::{AnalysisDomain, ResultsVisitor},
     transform::MirPass,
@@ -54,6 +57,7 @@ use crate::{
 
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_index::bit_set::BitSet;
+use rustc_middle::mir::traversal::preorder;
 use rustc_middle::mir::BasicBlock;
 use rustc_middle::mir::{self, Body, HasLocalDecls, Location, Statement};
 use rustc_middle::ty::TyCtxt;
@@ -66,10 +70,24 @@ impl MirPass<'tcx> for GenericTrampoliner {
         // At every program point, we only want to consider every live local. Unlike a lot of other
         // use cases, we don't need to consider a local live if a reference to it is live, because
         // when we synthesise the impl function, we can just pass the live reference in instead.
-        let _liveness_results = MaybeLiveLocals { drop_is_use: false }
-            .into_engine(tcx, body)
-            .iterate_to_fixpoint()
-            .visit_with(body, body.basic_blocks().indices(), &mut AnnotateGenericStatements::new(body));
+        let liveness_results =
+            MaybeLiveLocals { drop_is_use: false }.into_engine(tcx, body).iterate_to_fixpoint();
+        let mut annotator = AnnotateGenericStatements::new(body);
+        liveness_results.visit_with(body, body.basic_blocks().indices(), &mut annotator);
+        // We can now run a forward analysis which propagates "may be generic" down the CFG.
+        let may_be_generic_results =
+            GenericMayBeInScope::new(annotator).into_engine(tcx, body).iterate_to_fixpoint();
+        // Take these results and collect them into the last point that's generic:
+        let mut collector = CollectLastNonGenericPoint::new();
+        may_be_generic_results.visit_with(
+            body,
+            preorder(body).map(|(bb, _bb_data)| bb),
+            &mut collector,
+        );
+        // And there we have it -- the location of the last statement that is generic. All
+        // successors to this statement are non-generic, and can be split into the impl function.
+        let last_generic_location = collector.into_last_generic_point();
+        debug!("Location of last generic point: {:#?}", last_generic_location);
     }
 }
 
@@ -91,12 +109,10 @@ impl AnnotateGenericStatements<'body, 'tcx> {
         // FIXME: Replace with map (BasicBlock -> StatementIndex). We could just store, for
         // each basic block, where in the basic block the last statement with a live generic
         // is.
-        Self {
-            body,
-            block_map: FxIndexMap::default(),
-        }
+        Self { body, block_map: FxIndexMap::default() }
     }
 
+    #[allow(unused)] // TODO: remove
     fn has_live_generic(&self, location: &Location) -> bool {
         debug_assert!(self.block_map.contains_key(&location.block));
         self.block_map[&location.block].contains(location.statement_index)
@@ -175,6 +191,139 @@ impl ResultsVisitor<'mir, 'tcx> for AnnotateGenericStatements<'body, 'tcx> {
         block_data: &'mir mir::BasicBlockData<'tcx>,
         block: BasicBlock,
     ) {
-        self.block_map.insert(block, BitSet::new_empty(block_data.statements.len()+/*terminator:*/1));
+        self.block_map
+            .insert(block, BitSet::new_empty(block_data.statements.len()+/*terminator:*/1));
+    }
+}
+
+/// An analysis which detects if any locals dependent on a generic parameter *may* be in scope.
+pub struct GenericMayBeInScope<'body, 'tcx> {
+    annotations: AnnotateGenericStatements<'body, 'tcx>,
+}
+
+impl GenericMayBeInScope<'body, 'tcx> {
+    fn new(annotations: AnnotateGenericStatements<'body, 'tcx>) -> Self {
+        Self { annotations }
+    }
+
+    fn genericness(&self, location: &Location) -> Genericness {
+        if self.annotations.has_live_generic(location) {
+            Genericness::Maybe
+        } else {
+            Genericness::No
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Genericness {
+    Maybe,
+    No,
+}
+
+impl JoinSemiLattice for Genericness {
+    fn join(&mut self, other: &Self) -> bool {
+        if self != other {
+            *self = Genericness::Maybe;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl<C> DebugWithContext<C> for Genericness {}
+
+impl AnalysisDomain<'tcx> for GenericMayBeInScope<'body, 'tcx> {
+    type Domain = Genericness;
+    type Direction = Forward;
+
+    const NAME: &'static str = "genericness";
+
+    fn bottom_value(&self, _body: &mir::Body<'tcx>) -> Self::Domain {
+        Genericness::No
+    }
+
+    fn initialize_start_block(&self, _body: &mir::Body<'tcx>, _state: &mut Self::Domain) {
+        // Nothing
+    }
+}
+
+impl Analysis<'tcx> for GenericMayBeInScope<'body, 'tcx> {
+    fn apply_statement_effect(
+        &self,
+        state: &mut Self::Domain,
+        _statement: &mir::Statement<'tcx>,
+        location: Location,
+    ) {
+        *state = self.genericness(&location);
+    }
+
+    fn apply_terminator_effect(
+        &self,
+        state: &mut Self::Domain,
+        _terminator: &mir::Terminator<'tcx>,
+        location: Location,
+    ) {
+        *state = self.genericness(&location);
+    }
+
+    fn apply_call_return_effect(
+        &self,
+        _state: &mut Self::Domain,
+        _block: BasicBlock,
+        _func: &mir::Operand<'tcx>,
+        _args: &[mir::Operand<'tcx>],
+        _return_place: mir::Place<'tcx>,
+    ) {
+        // Empty -- we just propagate whatever the call node had. We'll pick up an introduced
+        // generic in the next statement -- we can't split on call-return anyway.
+    }
+}
+
+struct CollectLastNonGenericPoint {
+    // Points to the last location that is a generic statement. Any successors to the statement at that
+    // location must be non-generic.
+    // None at start, indicating the exit node.
+    last_generic_point: Option<Location>,
+}
+
+impl CollectLastNonGenericPoint {
+    fn new() -> Self {
+        Self { last_generic_point: None }
+    }
+    fn check(
+        &mut self,
+        state: &<Self as ResultsVisitor<'mir, 'tcx>>::FlowState,
+        location: Location,
+    ) {
+        if let Genericness::Maybe = state {
+            self.last_generic_point = Some(location);
+        }
+    }
+    fn into_last_generic_point(self) -> Option<Location> {
+        self.last_generic_point
+    }
+}
+
+impl ResultsVisitor<'mir, 'tcx> for CollectLastNonGenericPoint {
+    type FlowState = <GenericMayBeInScope<'mir, 'tcx> as AnalysisDomain<'tcx>>::Domain;
+
+    fn visit_statement_after_primary_effect(
+        &mut self,
+        state: &Self::FlowState,
+        _statement: &'mir mir::Statement<'tcx>,
+        location: Location,
+    ) {
+        self.check(state, location);
+    }
+
+    fn visit_terminator_after_primary_effect(
+        &mut self,
+        state: &Self::FlowState,
+        _terminator: &'mir mir::Terminator<'tcx>,
+        location: Location,
+    ) {
+        self.check(state, location);
     }
 }
