@@ -112,7 +112,6 @@ impl AnnotateGenericStatements<'body, 'tcx> {
         Self { body, block_map: FxIndexMap::default() }
     }
 
-    #[allow(unused)] // TODO: remove
     fn has_live_generic(&self, location: &Location) -> bool {
         debug_assert!(self.block_map.contains_key(&location.block));
         self.block_map[&location.block].contains(location.statement_index)
@@ -145,10 +144,10 @@ impl AnnotateGenericStatements<'body, 'tcx> {
         {
             // Found a generic ty!
             debug!("Found a live generic ty: {:?}", generic_ty);
+            self.mark_has_live_generic(&location);
         } else {
             // All live variables are fully concrete. This is a pinch point.
             debug!("This is a pinch point!");
-            self.mark_has_live_generic(&location);
         }
     }
 }
@@ -170,6 +169,7 @@ impl ResultsVisitor<'mir, 'tcx> for AnnotateGenericStatements<'body, 'tcx> {
         );
         self.check_for_pinch_point(state, location)
     }
+
     fn visit_terminator_after_primary_effect(
         &mut self,
         state: &Self::FlowState,
@@ -259,6 +259,15 @@ impl Analysis<'tcx> for GenericMayBeInScope<'body, 'tcx> {
         *state = self.genericness(&location);
     }
 
+    fn apply_before_terminator_effect(
+        &self,
+        state: &mut Self::Domain,
+        _terminator: &mir::Terminator<'tcx>,
+        _location: Location,
+    ) {
+        *state = Genericness::No;
+    }
+
     fn apply_terminator_effect(
         &self,
         state: &mut Self::Domain,
@@ -270,14 +279,13 @@ impl Analysis<'tcx> for GenericMayBeInScope<'body, 'tcx> {
 
     fn apply_call_return_effect(
         &self,
-        _state: &mut Self::Domain,
+        state: &mut Self::Domain,
         _block: BasicBlock,
         _func: &mir::Operand<'tcx>,
         _args: &[mir::Operand<'tcx>],
         _return_place: mir::Place<'tcx>,
     ) {
-        // Empty -- we just propagate whatever the call node had. We'll pick up an introduced
-        // generic in the next statement -- we can't split on call-return anyway.
+        *state = Genericness::No;
     }
 }
 
