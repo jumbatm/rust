@@ -47,6 +47,7 @@
 
 use crate::dataflow::impls::MaybeLiveLocals;
 use crate::dataflow::Analysis;
+use crate::dataflow::Results;
 use crate::{
     dataflow::{AnalysisDomain, ResultsVisitor},
     transform::MirPass,
@@ -67,8 +68,10 @@ pub struct GenericTrampoliner;
 
 impl MirPass<'tcx> for GenericTrampoliner {
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
+        let liveness_results =
+            MaybeLiveLocals { drop_is_use: false }.into_engine(tcx, body).iterate_to_fixpoint();
         let mut rpo = reverse_postorder(&body);
-        let split_point = find_trampoline_point(tcx, body, &mut rpo);
+        let split_point = find_trampoline_point(body, liveness_results, &mut rpo);
         debug!("Location of pinch point: {:#?}", &split_point);
         let split_point = if let Some(split_point) = split_point {
             split_point
@@ -82,14 +85,17 @@ impl MirPass<'tcx> for GenericTrampoliner {
 
         // Now, collect the set of basic blocks we'll have to move.
         let blocks_to_move = {
-            let (idx, _) = rpo_blocks.iter().enumerate().find(|(_idx, &bb)| bb == impl_fn_start).unwrap();
+            let (idx, _) =
+                rpo_blocks.iter().enumerate().find(|(_idx, &bb)| bb == impl_fn_start).unwrap();
             &rpo_blocks[idx..]
         };
 
         // We only want to apply the optimisation if enough blocks are going to be moved into an
         // impl function. Otherwise, the space savings are neglible.
         const GENERIC_TRAMPOLINE_IMPL_FN_PERCENTAGE_THRESHOLD: f32 = 0.8;
-        if (blocks_to_move.len() as f32) / (rpo_blocks.len() as f32) < GENERIC_TRAMPOLINE_IMPL_FN_PERCENTAGE_THRESHOLD {
+        if (blocks_to_move.len() as f32) / (rpo_blocks.len() as f32)
+            < GENERIC_TRAMPOLINE_IMPL_FN_PERCENTAGE_THRESHOLD
+        {
             // Not worth performing the optimisation.
             // FIXME: May be useful to add an internal attribute that forces this optimisation to
             // be applied.
@@ -99,6 +105,7 @@ impl MirPass<'tcx> for GenericTrampoliner {
         // blocks we want to move. We now need to actually perform our transform.
         // First step: get all the live variables at this point, with the intent to turn them into
         // arguments of the impl function.
+        let live_variables = liveness_results.entry_set_for_block(impl_fn_start);
     }
 }
 
@@ -147,15 +154,13 @@ fn split_body(body: &'body mut Body<'tcx>, first_split_statement: Location) -> B
 
 /// Find the location of the first statement that should be put into the non-generic impl function.
 fn find_trampoline_point(
-    tcx: TyCtxt<'tcx>,
     body: &'body Body<'tcx>,
+    liveness_results: Results<'tcx, MaybeLiveLocals>,
     rpo: &mut ReversePostorder<'body, 'tcx>,
 ) -> Option<Location> {
     // At every program point, we only want to consider every live local. Unlike a lot of other
     // use cases, we don't need to consider a local live if a reference to it is live, because
     // when we synthesise the impl function, we can just pass the live reference in instead.
-    let liveness_results =
-        MaybeLiveLocals { drop_is_use: false }.into_engine(tcx, body).iterate_to_fixpoint();
     let mut annotator = AnnotateGenericStatements::new(body);
     liveness_results.visit_with(body, postorder(&body).map(|(bb, _)| bb), &mut annotator);
     // The first entry of `rpo` is the successor of every block.
