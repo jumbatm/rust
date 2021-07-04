@@ -56,8 +56,9 @@ use rustc_data_structures::fx::FxIndexMap;
 use rustc_index::bit_set::BitSet;
 use rustc_middle::mir::traversal::postorder;
 use rustc_middle::mir::traversal::reverse_postorder;
-use rustc_middle::mir::BasicBlock;
 use rustc_middle::mir::{self, Body, HasLocalDecls, Location, Statement};
+use rustc_middle::mir::{BasicBlock, BasicBlockData};
+use rustc_middle::mir::{Terminator, TerminatorKind};
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::ty::TypeFlags;
 
