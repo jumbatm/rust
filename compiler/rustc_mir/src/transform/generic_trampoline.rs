@@ -56,6 +56,7 @@ use rustc_data_structures::fx::FxIndexMap;
 use rustc_index::bit_set::BitSet;
 use rustc_middle::mir::traversal::postorder;
 use rustc_middle::mir::traversal::reverse_postorder;
+use rustc_middle::mir::traversal::ReversePostorder;
 use rustc_middle::mir::{self, Body, HasLocalDecls, Location, Statement};
 use rustc_middle::mir::{BasicBlock, BasicBlockData};
 use rustc_middle::mir::{Terminator, TerminatorKind};
@@ -66,7 +67,8 @@ pub struct GenericTrampoliner;
 
 impl MirPass<'tcx> for GenericTrampoliner {
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
-        let split_point = find_trampoline_point(tcx, body);
+        let mut rpo = reverse_postorder(&body);
+        let split_point = find_trampoline_point(tcx, body, &mut rpo);
         debug!("Location of pinch point: {:#?}", &split_point);
         let split_point = if let Some(split_point) = split_point {
             split_point
@@ -74,17 +76,36 @@ impl MirPass<'tcx> for GenericTrampoliner {
             // If the split point doesn't exist, we can't apply this optimisation anyway.
             return;
         };
+
+        let rpo_blocks: Vec<_> = rpo.into_blocks();
         let impl_fn_start = split_body(body, split_point);
+
+        // Now, collect the set of basic blocks we'll have to move.
+        let blocks_to_move = {
+            let (idx, _) = rpo_blocks.iter().enumerate().find(|(_idx, &bb)| bb == impl_fn_start).unwrap();
+            &rpo_blocks[idx..]
+        };
+
+        // We only want to apply the optimisation if enough blocks are going to be moved into an
+        // impl function. Otherwise, the space savings are neglible.
+        const GENERIC_TRAMPOLINE_IMPL_FN_PERCENTAGE_THRESHOLD: f32 = 0.8;
+        if (blocks_to_move.len() as f32) / (rpo_blocks.len() as f32) < GENERIC_TRAMPOLINE_IMPL_FN_PERCENTAGE_THRESHOLD {
+            // Not worth performing the optimisation.
+            // FIXME: May be useful to add an internal attribute that forces this optimisation to
+            // be applied.
+            return;
+        }
+        // At this point, we know we definitely want to apply the optimisation, and we know what
+        // blocks we want to move. We now need to actually perform our transform.
+        // First step: get all the live variables at this point, with the intent to turn them into
+        // arguments of the impl function.
     }
 }
 
 /// Take a body and make it so so that `first_split_statement` is at the beginning of a basic
 /// block (doing nothing if that's already case). Return the terminators that point to that block,
 /// and the BasicBlock index of the potentially-new block.
-fn split_body(
-    body: &'body mut Body<'tcx>,
-    first_split_statement: Location,
-) -> BasicBlock {
+fn split_body(body: &'body mut Body<'tcx>, first_split_statement: Location) -> BasicBlock {
     if first_split_statement.statement_index == 0 {
         let Location { block: first_split_block, .. } = first_split_statement;
         // This is already the start of a basic block, so we don't need to mutate the function in
@@ -125,7 +146,11 @@ fn split_body(
 }
 
 /// Find the location of the first statement that should be put into the non-generic impl function.
-fn find_trampoline_point(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) -> Option<Location> {
+fn find_trampoline_point(
+    tcx: TyCtxt<'tcx>,
+    body: &'body Body<'tcx>,
+    rpo: &mut ReversePostorder<'body, 'tcx>,
+) -> Option<Location> {
     // At every program point, we only want to consider every live local. Unlike a lot of other
     // use cases, we don't need to consider a local live if a reference to it is live, because
     // when we synthesise the impl function, we can just pass the live reference in instead.
@@ -139,22 +164,22 @@ fn find_trampoline_point(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) -> Option<Locatio
     // in the CFG). While MIR doesn't explicitly have an "exit block", we do have cleanup
     // blocks to run destructors, which is _hopefully_ close enough.
     // Take these results and collect them into the last point that's generic:
-    let (rpo, exit_block) = {
-        let mut rpo = reverse_postorder(body);
+    let exit_block = {
+        rpo.reset();
         let (block, bbd) = {
             // NOTE: We don't want to consume `rpo`, so we can't use Iterator::last.
             let mut last_elem = None;
             while let Some(e) = rpo.next() {
                 last_elem = Some(e);
             }
-            rpo.reset();
             last_elem.expect("MIR body with no blocks")
         };
-        (rpo, Location { block, statement_index: bbd.statements.len() + 1 })
+        Location { block, statement_index: bbd.statements.len() + 1 }
     };
     debug!("Exit block is {:?}", &exit_block);
     let mut last_generic_point = None;
     let mut candidate_split_point = None;
+    rpo.reset();
     let locations = rpo.flat_map(|(bb, bb_data)| {
         (0..bb_data.statements.len() + 1)
             .map(move |idx| Location { block: bb, statement_index: idx })

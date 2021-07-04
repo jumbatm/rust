@@ -265,8 +265,8 @@ impl<'a, 'tcx> ReversePostorder<'a, 'tcx> {
         ReversePostorder { body, blocks, idx: len }
     }
 
-    pub fn blocks(&self) -> &[BasicBlock] {
-        &self.blocks[..]
+    pub fn into_blocks(self) -> Vec<BasicBlock> {
+        self.blocks
     }
 
     pub fn reset(&mut self) {
